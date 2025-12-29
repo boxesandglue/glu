@@ -8,9 +8,14 @@ import (
 	"github.com/speedata/go-lua"
 )
 
-// toDimension converts a Lua value (number or string) to bag.ScaledPoint
-// Numbers are interpreted as points, strings can have units like "12pt", "1cm", "10mm"
+// toDimension converts a Lua value (ScaledPoint userdata, number, or string) to bag.ScaledPoint
+// ScaledPoint userdata is used directly, numbers are interpreted as points,
+// strings can have units like "12pt", "1cm", "10mm"
 func toDimension(l *lua.State, index int) (bag.ScaledPoint, error) {
+	// Check for ScaledPoint userdata first
+	if sp := testScaledPoint(l, index); sp != nil {
+		return sp.Value, nil
+	}
 	if l.IsNumber(index) {
 		n, _ := l.ToNumber(index)
 		return bag.ScaledPointFromFloat(n), nil
@@ -19,7 +24,7 @@ func toDimension(l *lua.State, index int) (bag.ScaledPoint, error) {
 		s, _ := l.ToString(index)
 		return bag.SP(s)
 	}
-	return 0, fmt.Errorf("expected number or string with unit")
+	return 0, fmt.Errorf("expected ScaledPoint, number or string with unit")
 }
 
 // checkDimension is like toDimension but calls lua.Errorf on error
@@ -58,6 +63,12 @@ func tableToTypesettingOptions(l *lua.State, index int, doc *frontend.Document) 
 	l.Field(absIndex, "font_size")
 	if sp, err := toDimension(l, -1); err == nil {
 		opts = append(opts, frontend.FontSize(sp))
+	} else {
+		l.Pop(1)
+		l.Field(absIndex, "fontsize")
+		if sp, err := toDimension(l, -1); err == nil {
+			opts = append(opts, frontend.FontSize(sp))
+		}
 	}
 	l.Pop(1)
 
@@ -65,6 +76,14 @@ func tableToTypesettingOptions(l *lua.State, index int, doc *frontend.Document) 
 	if ud := lua.TestUserData(l, -1, fontFamilyMetaTable); ud != nil {
 		if ff, ok := ud.(*FontFamily); ok {
 			opts = append(opts, frontend.Family(ff.Value))
+		}
+	} else {
+		l.Pop(1)
+		l.Field(absIndex, "fontfamily")
+		if ud := lua.TestUserData(l, -1, fontFamilyMetaTable); ud != nil {
+			if ff, ok := ud.(*FontFamily); ok {
+				opts = append(opts, frontend.Family(ff.Value))
+			}
 		}
 	}
 	l.Pop(1)
@@ -98,24 +117,4 @@ func tableToTypesettingOptions(l *lua.State, index int, doc *frontend.Document) 
 	l.Pop(1)
 
 	return opts
-}
-
-// spNew creates a ScaledPoint from pt: sp(points)
-func spNew(l *lua.State) int {
-	pt := lua.CheckNumber(l, 1)
-	sp := bag.ScaledPointFromFloat(pt)
-	l.PushNumber(float64(sp))
-	return 1
-}
-
-// spFromString creates a ScaledPoint from string: sp_string("12pt")
-func spFromString(l *lua.State) int {
-	s := lua.CheckString(l, 1)
-	sp, err := bag.SP(s)
-	if err != nil {
-		lua.Errorf(l, "invalid dimension: %s", err.Error())
-		return 0
-	}
-	l.PushNumber(float64(sp))
-	return 1
 }

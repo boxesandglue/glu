@@ -1,6 +1,10 @@
 package frontend
 
 import (
+	"os"
+	"path/filepath"
+
+	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/frontend"
 	"github.com/speedata/go-lua"
 )
@@ -206,11 +210,152 @@ func documentNewPage(l *lua.State) int {
 	return 1
 }
 
+// documentLoadColorprofile loads a color profile: doc:load_colorprofile(filename)
+func documentLoadColorprofile(l *lua.State) int {
+	d := checkDocument(l, 1)
+	filename := lua.CheckString(l, 2)
+
+	cp, err := d.Value.Doc.LoadColorprofile(filename)
+	if err != nil {
+		lua.Errorf(l, "failed to load color profile: %s", err.Error())
+		return 0
+	}
+
+	l.PushUserData(&ColorProfile{Value: cp})
+	lua.SetMetaTableNamed(l, colorProfileMetaTable)
+	return 1
+}
+
+// documentLoadImagefile loads an image file: doc:load_imagefile(filename, [page], [box])
+func documentLoadImagefile(l *lua.State) int {
+	d := checkDocument(l, 1)
+	filename := lua.CheckString(l, 2)
+	page := lua.OptInteger(l, 3, 1)
+	box := lua.OptString(l, 4, "/MediaBox")
+
+	imgf, err := d.Value.Doc.LoadImageFileWithBox(filename, box, page)
+	if err != nil {
+		lua.Errorf(l, "failed to load image: %s", err.Error())
+		return 0
+	}
+
+	l.PushUserData(&Imagefile{Value: imgf})
+	lua.SetMetaTableNamed(l, imagefileMetaTable)
+	return 1
+}
+
+// documentCreateImageNode creates an image node from an imagefile: doc:create_image_node(imagefile, [page], [box])
+func documentCreateImageNode(l *lua.State) int {
+	d := checkDocument(l, 1)
+	imgf := checkImagefile(l, 2)
+	page := lua.OptInteger(l, 3, 1)
+	box := lua.OptString(l, 4, "/MediaBox")
+
+	imgNode := d.Value.Doc.CreateImageNodeFromImagefile(imgf.Value, page, box)
+
+	l.PushUserData(&ImageNode{Value: imgNode})
+	lua.SetMetaTableNamed(l, imageNodeMetaTable)
+	return 1
+}
+
+// documentAttachFile attaches a file to the document: doc:attach_file(options)
+// options: { filename = "path/to/file", name = "visible name", description = "desc", mimetype = "text/xml" }
+func documentAttachFile(l *lua.State) int {
+	d := checkDocument(l, 1)
+	lua.CheckType(l, 2, lua.TypeTable)
+
+	// Get filename (required)
+	l.Field(2, "filename")
+	if l.IsNil(-1) {
+		lua.Errorf(l, "attach_file: filename is required")
+		return 0
+	}
+	filename := lua.CheckString(l, -1)
+	l.Pop(1)
+
+	// Read file data
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		lua.Errorf(l, "attach_file: failed to read file: %s", err.Error())
+		return 0
+	}
+
+	// Get name (optional, defaults to base filename)
+	l.Field(2, "name")
+	name := filepath.Base(filename)
+	if !l.IsNil(-1) {
+		name = lua.CheckString(l, -1)
+	}
+	l.Pop(1)
+
+	// Get description (optional)
+	l.Field(2, "description")
+	description := ""
+	if !l.IsNil(-1) {
+		description = lua.CheckString(l, -1)
+	}
+	l.Pop(1)
+
+	// Get mimetype (optional)
+	l.Field(2, "mimetype")
+	mimetype := "application/octet-stream"
+	if !l.IsNil(-1) {
+		mimetype = lua.CheckString(l, -1)
+	}
+	l.Pop(1)
+
+	attachment := document.Attachment{
+		Name:        name,
+		Description: description,
+		MimeType:    mimetype,
+		Data:        data,
+	}
+
+	d.Value.Doc.AttachFile(attachment)
+	return 0
+}
+
 // documentIndex handles attribute access (__index metamethod)
 func documentIndex(l *lua.State) int {
+	d := checkDocument(l, 1)
 	key := lua.CheckString(l, 2)
 
 	switch key {
+	// Attributes
+	case "title":
+		l.PushString(d.Value.Doc.Title)
+		return 1
+	case "author":
+		l.PushString(d.Value.Doc.Author)
+		return 1
+	case "subject":
+		l.PushString(d.Value.Doc.Subject)
+		return 1
+	case "creator":
+		l.PushString(d.Value.Doc.Creator)
+		return 1
+	case "keywords":
+		l.PushString(d.Value.Doc.Keywords)
+		return 1
+	case "format":
+		switch d.Value.Doc.Format {
+		case document.FormatPDF:
+			l.PushString("PDF")
+		case document.FormatPDFA3b:
+			l.PushString("PDF/A-3b")
+		case document.FormatPDFX3:
+			l.PushString("PDF/X-3")
+		case document.FormatPDFX4:
+			l.PushString("PDF/X-4")
+		case document.FormatPDFUA:
+			l.PushString("PDF/UA")
+		default:
+			l.PushString("PDF")
+		}
+		return 1
+	case "additional_xml_metadata":
+		l.PushString(d.Value.Doc.AdditionalXMLMetadata)
+		return 1
 	// Methods
 	case "finish":
 		l.PushGoFunction(documentFinish)
@@ -245,8 +390,63 @@ func documentIndex(l *lua.State) int {
 	case "new_page":
 		l.PushGoFunction(documentNewPage)
 		return 1
+	case "attach_file":
+		l.PushGoFunction(documentAttachFile)
+		return 1
+	case "load_imagefile":
+		l.PushGoFunction(documentLoadImagefile)
+		return 1
+	case "create_image_node":
+		l.PushGoFunction(documentCreateImageNode)
+		return 1
+	case "load_colorprofile":
+		l.PushGoFunction(documentLoadColorprofile)
+		return 1
 	}
 
+	return 0
+}
+
+// documentNewIndex handles attribute setting (__newindex metamethod)
+func documentNewIndex(l *lua.State) int {
+	d := checkDocument(l, 1)
+	key := lua.CheckString(l, 2)
+
+	switch key {
+	case "title":
+		d.Value.Doc.Title = lua.CheckString(l, 3)
+	case "author":
+		d.Value.Doc.Author = lua.CheckString(l, 3)
+	case "subject":
+		d.Value.Doc.Subject = lua.CheckString(l, 3)
+	case "creator":
+		d.Value.Doc.Creator = lua.CheckString(l, 3)
+	case "keywords":
+		d.Value.Doc.Keywords = lua.CheckString(l, 3)
+	case "format":
+		formatStr := lua.CheckString(l, 3)
+		switch formatStr {
+		case "PDF":
+			d.Value.Doc.Format = document.FormatPDF
+		case "PDF/A-3b":
+			d.Value.Doc.Format = document.FormatPDFA3b
+		case "PDF/X-3":
+			d.Value.Doc.Format = document.FormatPDFX3
+		case "PDF/X-4":
+			d.Value.Doc.Format = document.FormatPDFX4
+		case "PDF/UA":
+			d.Value.Doc.Format = document.FormatPDFUA
+		default:
+			lua.Errorf(l, "unknown format: %s (use PDF, PDF/A-3b, PDF/X-3, PDF/X-4, PDF/UA)", formatStr)
+		}
+	case "additional_xml_metadata":
+		d.Value.Doc.AdditionalXMLMetadata = lua.CheckString(l, 3)
+	case "language":
+		lang := checkLanguage(l, 3)
+		d.Value.Doc.DefaultLanguage = lang.Value
+	default:
+		lua.Errorf(l, "cannot set attribute %s on Document", key)
+	}
 	return 0
 }
 
@@ -255,6 +455,7 @@ func registerDocumentMetaTable(l *lua.State) {
 	lua.NewMetaTable(l, documentMetaTable)
 	lua.SetFunctions(l, []lua.RegistryFunction{
 		{Name: "__index", Function: documentIndex},
+		{Name: "__newindex", Function: documentNewIndex},
 	}, 0)
 	l.Pop(1)
 }

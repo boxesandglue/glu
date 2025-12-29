@@ -6,10 +6,16 @@ import (
 )
 
 const textMetaTable = "Text"
+const textSettingsMetaTable = "TextSettings"
 
 // Text wraps the boxesandglue frontend.Text type
 type Text struct {
 	Value *frontend.Text
+}
+
+// TextSettings provides access to Text.Settings
+type TextSettings struct {
+	text *frontend.Text
 }
 
 // checkText retrieves a Text userdata from the stack
@@ -98,6 +104,7 @@ func textSetSettings(l *lua.State) int {
 
 // textIndex handles attribute access (__index metamethod)
 func textIndex(l *lua.State) int {
+	te := checkText(l, 1)
 	key := lua.CheckString(l, 2)
 
 	switch key {
@@ -108,11 +115,124 @@ func textIndex(l *lua.State) int {
 		l.PushGoFunction(textSet)
 		return 1
 	case "settings":
-		l.PushGoFunction(textSetSettings)
+		// Return a proxy table for settings
+		l.PushUserData(&TextSettings{text: te.Value})
+		lua.SetMetaTableNamed(l, textSettingsMetaTable)
 		return 1
 	}
 
 	return 0
+}
+
+// textNewIndex handles attribute setting (__newindex metamethod)
+func textNewIndex(l *lua.State) int {
+	te := checkText(l, 1)
+	key := lua.CheckString(l, 2)
+
+	switch key {
+	case "items":
+		// Set items from a Lua table
+		if l.IsTable(3) {
+			te.Value.Items = nil
+			l.PushNil()
+			for l.Next(3) {
+				item := luaValueToItem(l, -1)
+				if item != nil {
+					te.Value.Items = append(te.Value.Items, item)
+				}
+				l.Pop(1)
+			}
+		}
+	}
+	return 0
+}
+
+// textSettingsIndex handles settings attribute access (__index metamethod)
+func textSettingsIndex(l *lua.State) int {
+	ud := lua.CheckUserData(l, 1, textSettingsMetaTable)
+	ts, ok := ud.(*TextSettings)
+	if !ok {
+		return 0
+	}
+
+	key := lua.CheckString(l, 2)
+	if ts.text.Settings == nil {
+		return 0
+	}
+
+	// Look up the setting
+	settingType := settingKeyToType(key)
+	if settingType == 0 {
+		return 0
+	}
+
+	if val, exists := ts.text.Settings[settingType]; exists {
+		pushSettingValue(l, settingType, val)
+		return 1
+	}
+	return 0
+}
+
+// textSettingsNewIndex handles settings attribute setting (__newindex metamethod)
+func textSettingsNewIndex(l *lua.State) int {
+	ud := lua.CheckUserData(l, 1, textSettingsMetaTable)
+	ts, ok := ud.(*TextSettings)
+	if !ok {
+		return 0
+	}
+
+	key := lua.CheckString(l, 2)
+
+	if ts.text.Settings == nil {
+		ts.text.Settings = make(frontend.TypesettingSettings)
+	}
+
+	settingType, value := parseSettingKeyValue(l, key, 3)
+	if settingType != 0 {
+		ts.text.Settings[settingType] = value
+	}
+	return 0
+}
+
+func settingKeyToType(key string) frontend.SettingType {
+	switch key {
+	case "fontfamily", "font_family":
+		return frontend.SettingFontFamily
+	case "fontweight", "font_weight":
+		return frontend.SettingFontWeight
+	case "fontstyle", "font_style":
+		return frontend.SettingStyle
+	case "size", "fontsize", "font_size":
+		return frontend.SettingSize
+	case "color":
+		return frontend.SettingColor
+	case "leading":
+		return frontend.SettingLeading
+	case "halign", "align":
+		return frontend.SettingHAlign
+	case "valign":
+		return frontend.SettingVAlign
+	}
+	return 0
+}
+
+func pushSettingValue(l *lua.State, settingType frontend.SettingType, val any) {
+	switch settingType {
+	case frontend.SettingHAlign:
+		if h, ok := val.(frontend.HorizontalAlignment); ok {
+			l.PushString(halignToString(h))
+		}
+	case frontend.SettingVAlign:
+		if v, ok := val.(frontend.VerticalAlignment); ok {
+			l.PushString(valignToString(v))
+		}
+	case frontend.SettingFontWeight:
+		if w, ok := val.(frontend.FontWeight); ok {
+			l.PushInteger(int(w))
+		}
+	default:
+		l.PushNil()
+	}
 }
 
 // registerTextMetaTable creates the Text metatable
@@ -120,6 +240,17 @@ func registerTextMetaTable(l *lua.State) {
 	lua.NewMetaTable(l, textMetaTable)
 	lua.SetFunctions(l, []lua.RegistryFunction{
 		{Name: "__index", Function: textIndex},
+		{Name: "__newindex", Function: textNewIndex},
+	}, 0)
+	l.Pop(1)
+}
+
+// registerTextSettingsMetaTable creates the TextSettings metatable
+func registerTextSettingsMetaTable(l *lua.State) {
+	lua.NewMetaTable(l, textSettingsMetaTable)
+	lua.SetFunctions(l, []lua.RegistryFunction{
+		{Name: "__index", Function: textSettingsIndex},
+		{Name: "__newindex", Function: textSettingsNewIndex},
 	}, 0)
 	l.Pop(1)
 }

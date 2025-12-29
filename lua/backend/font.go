@@ -171,13 +171,13 @@ func registerFontMetaTables(l *lua.State) {
 	l.Pop(1)
 }
 
-// registerFontModule registers the font module
-func registerFontModule(l *lua.State) {
+// openFont creates the font module table for require("glu.font")
+func openFont(l *lua.State) int {
 	registerFontMetaTables(l)
 
 	l.NewTable()
 	lua.SetFunctions(l, []lua.RegistryFunction{
 		{Name: "new", Function: fontNew},
 	}, 0)
-	l.SetGlobal("font")
+	return 1
 }

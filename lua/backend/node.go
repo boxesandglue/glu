@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"reflect"
+
 	"github.com/boxesandglue/boxesandglue/backend/bag"
 	"github.com/boxesandglue/boxesandglue/backend/node"
 	"github.com/speedata/go-lua"
@@ -107,6 +109,31 @@ func getNode(l *lua.State, index int) node.Node {
 		return v.Value
 	case *NodeStartStop:
 		return v.Value
+	default:
+		// Try to extract node.Node via reflection for cross-package types
+		// This handles frontend.ImageNode which has a Value *node.Image field
+		if n := extractNodeViaReflection(ud); n != nil {
+			return n
+		}
+	}
+	return nil
+}
+
+// extractNodeViaReflection tries to extract a node.Node from a struct with a Value field
+func extractNodeViaReflection(ud any) node.Node {
+	v := reflect.ValueOf(ud)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return nil
+	}
+	valueField := v.FieldByName("Value")
+	if !valueField.IsValid() || valueField.IsNil() {
+		return nil
+	}
+	if n, ok := valueField.Interface().(node.Node); ok {
+		return n
 	}
 	return nil
 }
@@ -842,8 +869,8 @@ func registerNodeMetaTables(l *lua.State) {
 	l.Pop(1)
 }
 
-// registerNodeModule registers the node module
-func registerNodeModule(l *lua.State) {
+// openNode creates the node module table for require("glu.node")
+func openNode(l *lua.State) int {
 	registerNodeMetaTables(l)
 
 	l.NewTable()
@@ -871,5 +898,5 @@ func registerNodeModule(l *lua.State) {
 	l.PushInteger(int(node.StretchFilll))
 	l.SetField(-2, "filll")
 
-	l.SetGlobal("node")
+	return 1
 }

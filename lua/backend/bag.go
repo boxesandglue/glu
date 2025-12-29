@@ -4,39 +4,42 @@ import (
 	"log/slog"
 
 	"github.com/boxesandglue/boxesandglue/backend/bag"
+	"github.com/speedata/glu/lua/common"
 	"github.com/speedata/go-lua"
 )
 
-// spFromString creates a ScaledPoint from string: bag.sp("12pt")
+// spFromString creates a ScaledPoint from string: glu.sp("12pt")
+// Returns a ScaledPoint userdata
 func spFromString(l *lua.State) int {
-	s := lua.CheckString(l, 1)
-	sp, err := bag.SP(s)
-	if err != nil {
-		lua.Errorf(l, "invalid dimension: %s", err.Error())
+	return common.SpFromString(l)
+}
+
+// spFromPT creates a ScaledPoint from points: glu.sp_from_pt(12)
+// Returns a ScaledPoint userdata
+func spFromPT(l *lua.State) int {
+	return common.SpNew(l)
+}
+
+// spToPT converts a ScaledPoint to points: glu.sp_to_pt(sp)
+// Accepts ScaledPoint userdata, string, or number
+func spToPT(l *lua.State) int {
+	sp, ok := common.ToScaledPointValue(l, 1)
+	if !ok {
+		lua.Errorf(l, "expected ScaledPoint, string with unit, or number")
 		return 0
 	}
-	l.PushInteger(int(sp))
-	return 1
-}
-
-// spFromPT creates a ScaledPoint from points: bag.sp_from_pt(12)
-func spFromPT(l *lua.State) int {
-	pt := lua.CheckNumber(l, 1)
-	sp := bag.ScaledPointFromFloat(pt)
-	l.PushInteger(int(sp))
-	return 1
-}
-
-// spToPT converts a ScaledPoint to points: bag.sp_to_pt(sp)
-func spToPT(l *lua.State) int {
-	sp := bag.ScaledPoint(lua.CheckInteger(l, 1))
 	l.PushNumber(sp.ToPT())
 	return 1
 }
 
-// spToUnit converts a ScaledPoint to a unit: bag.sp_to_unit(sp, "cm")
+// spToUnit converts a ScaledPoint to a unit: glu.sp_to_unit(sp, "cm")
+// Accepts ScaledPoint userdata, string, or number
 func spToUnit(l *lua.State) int {
-	sp := bag.ScaledPoint(lua.CheckInteger(l, 1))
+	sp, ok := common.ToScaledPointValue(l, 1)
+	if !ok {
+		lua.Errorf(l, "expected ScaledPoint, string with unit, or number")
+		return 0
+	}
 	unit := lua.CheckString(l, 2)
 	val, err := sp.ToUnit(unit)
 	if err != nil {
@@ -47,20 +50,16 @@ func spToUnit(l *lua.State) int {
 	return 1
 }
 
-// spMax returns the maximum of two ScaledPoints: bag.max(sp1, sp2)
+// spMax returns the maximum of two ScaledPoints: glu.max(sp1, sp2)
+// Returns a ScaledPoint userdata
 func spMax(l *lua.State) int {
-	sp1 := bag.ScaledPoint(lua.CheckInteger(l, 1))
-	sp2 := bag.ScaledPoint(lua.CheckInteger(l, 2))
-	l.PushInteger(int(bag.Max(sp1, sp2)))
-	return 1
+	return common.SpMax(l)
 }
 
-// spMin returns the minimum of two ScaledPoints: bag.min(sp1, sp2)
+// spMin returns the minimum of two ScaledPoints: glu.min(sp1, sp2)
+// Returns a ScaledPoint userdata
 func spMin(l *lua.State) int {
-	sp1 := bag.ScaledPoint(lua.CheckInteger(l, 1))
-	sp2 := bag.ScaledPoint(lua.CheckInteger(l, 2))
-	l.PushInteger(int(bag.Min(sp1, sp2)))
-	return 1
+	return common.SpMin(l)
 }
 
 // logDebug logs a debug message: bag.debug(msg, key1, val1, ...)
@@ -116,8 +115,11 @@ func collectLogArgs(l *lua.State, startIndex int) []any {
 	return args
 }
 
-// registerBagModule registers the bag module
-func registerBagModule(l *lua.State) {
+// openGlu creates the glu module table for require("glu")
+func openGlu(l *lua.State) int {
+	// Register ScaledPoint metatable (shared with frontend)
+	common.RegisterScaledPointMetaTable(l)
+
 	l.NewTable()
 	lua.SetFunctions(l, []lua.RegistryFunction{
 		{Name: "sp", Function: spFromString},
@@ -136,5 +138,5 @@ func registerBagModule(l *lua.State) {
 	l.PushInteger(int(bag.Factor))
 	l.SetField(-2, "factor")
 
-	l.SetGlobal("bag")
+	return 1
 }

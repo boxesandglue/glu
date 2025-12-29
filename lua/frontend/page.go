@@ -2,7 +2,9 @@ package frontend
 
 import (
 	"github.com/boxesandglue/boxesandglue/backend/document"
+	"github.com/boxesandglue/boxesandglue/backend/node"
 	"github.com/speedata/go-lua"
+	"github.com/speedata/glu/lua/backend"
 )
 
 const pageMetaTable = "Page"
@@ -24,13 +26,31 @@ func checkPage(l *lua.State, index int) *Page {
 
 // pageOutputAt places a VList at position: page:output_at(x, y, vlist)
 // x, y can be numbers (points) or strings with units ("72pt", "1in", "2cm")
+// vlist can be either a frontend VList or a backend node.VList
 func pageOutputAt(l *lua.State) int {
 	p := checkPage(l, 1)
 	x := checkDimension(l, 2)
 	y := checkDimension(l, 3)
-	vl := checkVList(l, 4)
 
-	p.Value.OutputAt(x, y, vl.Value)
+	// Try to get the VList - accept both frontend VList and backend node.VList
+	var vl *node.VList
+	if ud := lua.TestUserData(l, 4, vlistMetaTable); ud != nil {
+		if v, ok := ud.(*VList); ok {
+			vl = v.Value
+		}
+	} else if ud := lua.TestUserData(l, 4, "node.VList"); ud != nil {
+		// Backend NodeVList wrapper
+		if v, ok := ud.(*backend.NodeVList); ok {
+			vl = v.Value
+		}
+	}
+
+	if vl == nil {
+		lua.Errorf(l, "VList expected")
+		return 0
+	}
+
+	p.Value.OutputAt(x, y, vl)
 
 	// Return self for chaining
 	l.PushValue(1)
@@ -57,10 +77,10 @@ func pageIndex(l *lua.State) int {
 		l.PushGoFunction(pageShipout)
 		return 1
 	case "width":
-		l.PushNumber(p.Value.Width.ToPT())
+		pushScaledPoint(l, p.Value.Width)
 		return 1
 	case "height":
-		l.PushNumber(p.Value.Height.ToPT())
+		pushScaledPoint(l, p.Value.Height)
 		return 1
 	}
 

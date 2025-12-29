@@ -1,6 +1,8 @@
 package frontend
 
 import (
+	"fmt"
+
 	pdf "github.com/boxesandglue/baseline-pdf"
 	"github.com/boxesandglue/boxesandglue/frontend"
 	"github.com/speedata/go-lua"
@@ -75,6 +77,20 @@ func fontSourceNew(l *lua.State) int {
 			fs.SizeAdjust, _ = l.ToNumber(-1)
 		}
 		l.Pop(1)
+
+		// Parse features as array of strings
+		l.Field(1, "features")
+		if l.IsTable(-1) {
+			l.PushNil()
+			for l.Next(-2) {
+				if l.IsString(-1) {
+					feature, _ := l.ToString(-1)
+					fs.FontFeatures = append(fs.FontFeatures, feature)
+				}
+				l.Pop(1)
+			}
+		}
+		l.Pop(1)
 	} else if l.IsString(1) {
 		// Simple case: just a filename
 		fs.Location = lua.CheckString(l, 1)
@@ -86,11 +102,49 @@ func fontSourceNew(l *lua.State) int {
 }
 
 // fontFamilyAddMember adds a font member: ff:add_member(fontsource, weight, style)
+// or ff:add_member({source = fs, weight = 400, style = "normal"})
 func fontFamilyAddMember(l *lua.State) int {
 	ff := checkFontFamily(l, 1)
-	fs := checkFontSource(l, 2)
-	weightStr := lua.OptString(l, 3, "400")
-	styleStr := lua.OptString(l, 4, "normal")
+
+	var fs *FontSource
+	var weightStr string = "400"
+	var styleStr string = "normal"
+
+	if l.IsTable(2) {
+		// Table-based call: {source = fs, weight = 400, style = "normal"}
+		l.Field(2, "source")
+		if ud := lua.TestUserData(l, -1, fontSourceMetaTable); ud != nil {
+			if f, ok := ud.(*FontSource); ok {
+				fs = f
+			}
+		}
+		l.Pop(1)
+
+		l.Field(2, "weight")
+		if l.IsNumber(-1) {
+			n, _ := l.ToInteger(-1)
+			weightStr = fmt.Sprintf("%d", n)
+		} else if l.IsString(-1) {
+			weightStr, _ = l.ToString(-1)
+		}
+		l.Pop(1)
+
+		l.Field(2, "style")
+		if l.IsString(-1) {
+			styleStr, _ = l.ToString(-1)
+		}
+		l.Pop(1)
+
+		if fs == nil {
+			lua.Errorf(l, "add_member: source is required")
+			return 0
+		}
+	} else {
+		// Positional call: ff:add_member(fontsource, weight, style)
+		fs = checkFontSource(l, 2)
+		weightStr = lua.OptString(l, 3, "400")
+		styleStr = lua.OptString(l, 4, "normal")
+	}
 
 	weight := frontend.ResolveFontWeight(weightStr, frontend.FontWeight400)
 	style := frontend.ResolveFontStyle(styleStr)

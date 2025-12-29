@@ -133,7 +133,7 @@ func tableIndex(l *lua.State) int {
 	case "stretch":
 		l.PushBoolean(tbl.Value.Stretch)
 		return 1
-	case "add_row":
+	case "add_row", "new_row":
 		l.PushGoFunction(tableAddRow)
 		return 1
 	case "set_columns":
@@ -191,7 +191,7 @@ func rowIndex(l *lua.State) int {
 	key := lua.CheckString(l, 2)
 
 	switch key {
-	case "add_cell":
+	case "add_cell", "new_cell":
 		l.PushGoFunction(rowAddCell)
 		return 1
 	}
@@ -232,7 +232,7 @@ func cellIndex(l *lua.State) int {
 	key := lua.CheckString(l, 2)
 
 	switch key {
-	case "set_contents":
+	case "set_contents", "append":
 		l.PushGoFunction(cellSetContents)
 		return 1
 	case "halign":

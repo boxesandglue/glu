@@ -29,13 +29,13 @@ func vlistIndex(l *lua.State) int {
 
 	switch key {
 	case "width":
-		l.PushNumber(vl.Value.Width.ToPT())
+		pushScaledPoint(l, vl.Value.Width)
 		return 1
 	case "height":
-		l.PushNumber(vl.Value.Height.ToPT())
+		pushScaledPoint(l, vl.Value.Height)
 		return 1
 	case "depth":
-		l.PushNumber(vl.Value.Depth.ToPT())
+		pushScaledPoint(l, vl.Value.Depth)
 		return 1
 	}
 

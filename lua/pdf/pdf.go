@@ -172,8 +172,8 @@ func pdfNewIndex(l *lua.State) int {
 	return 0
 }
 
-// Open registers the pdf module with the Lua state
-func Open(l *lua.State) {
+// openPDF creates the pdf module table for require("glu.pdf")
+func openPDF(l *lua.State) int {
 	// Create PDF metatable
 	lua.NewMetaTable(l, pdfMetaTable)
 	lua.SetFunctions(l, []lua.RegistryFunction{
@@ -192,5 +192,11 @@ func Open(l *lua.State) {
 	lua.NewLibrary(l, []lua.RegistryFunction{
 		{Name: "new", Function: pdfNew},
 	})
-	l.SetGlobal("pdf")
+	return 1
+}
+
+// Open registers the pdf module for require() in the Lua state.
+func Open(l *lua.State) {
+	lua.Require(l, "glu.pdf", openPDF, false)
+	l.Pop(1)
 }

@@ -10,9 +10,12 @@ import (
 	"github.com/speedata/go-lua"
 )
 
-// Open registers the backend modules (bag, node, font) as globals in the Lua state.
+// Open registers the backend modules for require() in the Lua state.
 func Open(l *lua.State) {
-	registerBagModule(l)
-	registerNodeModule(l)
-	registerFontModule(l)
+	lua.Require(l, "glu", openGlu, false)
+	l.Pop(1)
+	lua.Require(l, "glu.node", openNode, false)
+	l.Pop(1)
+	lua.Require(l, "glu.font", openFont, false)
+	l.Pop(1)
 }
