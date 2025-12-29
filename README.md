@@ -1,3 +1,5 @@
+[![Homepage](https://img.shields.io/badge/homepage-boxesandglue.dev-blue)](https://boxesandglue.dev/cli)
+
 # glu
 
 Lua typesetting with [boxes and glue](https://github.com/boxesandglue/boxesandglue).
@@ -27,31 +29,36 @@ glu [options] <filename.lua>
 
 ```lua
 -- hello.lua
+local frontend = require("glu.frontend")
 local doc = frontend.new("hello.pdf")
-
 -- Load a font
 local ff = doc:new_font_family("text")
-local fs = frontend.fontsource({ location = "path/to/font.ttf" })
-ff:add_member(fs, "regular", "normal")
-
--- Create text
-local txt = frontend.text()
-txt:settings({
+local fs = frontend.fontsource({ location = "fonts/CrimsonPro-Regular.ttf" })
+ff:add_member(fs, 400, "normal")
+-- Create text content
+local txt = frontend.text({
     font_family = ff,
     font_size = "12pt",
     color = "black"
 })
-txt:append("Hello, World!")
-
--- Format and output
-local vlist = doc:format_paragraph(txt, "15cm")
-
+local str = [[In olden times when wishing still helped one, there lived a king whose daughters
+	were all beautiful; and the youngest was so beautiful that the sun itself, which
+	has seen so much, was astonished whenever it shone in her face.
+	Close by the king's castle lay a great dark forest, and under an old lime-tree in the forest
+	was a well, and when the day was very warm, the king's child went out into the
+	forest and sat down by the side of the cool fountain; and when she was bored she
+	took a golden ball, and threw it up on high and caught it; and this ball was her
+	favorite plaything.]]
+-- Remove newlines
+str = str:gsub("\n", " ")
+txt:append(str)
+-- Format paragraph and create page
+local vlist = doc:format_paragraph(txt, "225pt", { leading = "14pt" })
 local page = doc:new_page()
-page.width = "21cm"
-page.height = "29.7cm"
-page:output_at("2cm", "27cm", vlist)
+page.width = "210mm"
+page.height = "297mm"
+page:output_at("1cm", "28cm", vlist)
 page:shipout()
-
 doc:finish()
 ```
 

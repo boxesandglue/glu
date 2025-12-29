@@ -28,9 +28,26 @@ func checkText(l *lua.State, index int) *Text {
 	return nil
 }
 
-// textNew creates a new Text object: text.new()
+// textNew creates a new Text object: text.new() or text.new({settings})
 func textNew(l *lua.State) int {
 	te := frontend.NewText()
+
+	// If a table is passed, apply settings
+	if l.Top() >= 1 && l.IsTable(1) {
+		te.Settings = make(frontend.TypesettingSettings)
+		l.PushNil()
+		for l.Next(1) {
+			if l.IsString(-2) {
+				key, _ := l.ToString(-2)
+				settingType, value := parseSettingKeyValue(l, key, l.AbsIndex(-1))
+				if settingType != 0 {
+					te.Settings[settingType] = value
+				}
+			}
+			l.Pop(1)
+		}
+	}
+
 	l.PushUserData(&Text{Value: te})
 	lua.SetMetaTableNamed(l, textMetaTable)
 	return 1
@@ -115,9 +132,13 @@ func textIndex(l *lua.State) int {
 		l.PushGoFunction(textSet)
 		return 1
 	case "settings":
-		// Return a proxy table for settings
+		// Return a proxy table for settings access (txt.settings.font_family = ...)
 		l.PushUserData(&TextSettings{text: te.Value})
 		lua.SetMetaTableNamed(l, textSettingsMetaTable)
+		return 1
+	case "apply":
+		// Set multiple settings from a table: txt:apply({font_family = ff, ...})
+		l.PushGoFunction(textSetSettings)
 		return 1
 	}
 
