@@ -78,6 +78,7 @@ glu provides the following Lua modules:
 | `bag`      | Scaled points, unit conversion, logging        |
 | `node`     | Node types and list operations                 |
 | `font`     | Font instances and text shaping                |
+| `textshape`| Low-level text shaping (HarfBuzz-port)         |
 
 ### frontend
 
@@ -292,6 +293,97 @@ local atoms = fnt:shape("Hello", "+liga", "+kern")
 for _, atom in ipairs(atoms) do
     print(atom.components, atom.advance)
 end
+```
+
+### textshape
+
+Low-level text shaping API wrapping the textshape `ot` package (HarfBuzz-port). Provides direct access to the shaping engine, independent of the boxesandglue abstraction.
+
+```lua
+local ts = require("glu.textshape")
+
+-- Load font and create shaper
+local font = ts.parse_font("fonts/Roboto-Regular.ttf")
+local shaper = ts.new_shaper(font)
+
+-- Create buffer and add text
+local buf = ts.new_buffer()
+buf:add_string("office")
+buf:guess_segment_properties()
+
+-- Shape with features
+shaper:shape(buf, {"+liga", "+kern"})
+
+-- Read results
+for i = 1, #buf do
+    local info = buf.info[i]
+    local pos = buf.pos[i]
+    print(string.format("glyph=%d cluster=%d advance=%d",
+        info.glyph_id, info.cluster, pos.x_advance))
+end
+```
+
+#### Module functions
+
+```lua
+ts.parse_font(filename, [index])   -- Load font file, returns Font
+ts.new_shaper(font)                -- Create Shaper from Font
+ts.new_face(font)                  -- Create Face from Font (for metrics)
+ts.new_buffer()                    -- Create empty Buffer
+ts.feature(str)                    -- Parse single feature (e.g. "+liga")
+ts.features(str)                   -- Parse comma-separated features
+```
+
+#### Buffer
+
+```lua
+buf:add_string(text)               -- Add text
+buf:add_codepoints({...})          -- Add codepoints
+buf:guess_segment_properties()     -- Guess direction/script/language
+buf:set_direction("ltr")           -- Set direction (ltr/rtl/ttb/btt)
+buf:set_script("latn")             -- Set script tag (4 chars)
+buf:set_language("en")             -- Set language tag
+buf:clear()                        -- Clear buffer
+buf:reverse()                      -- Reverse buffer
+#buf                               -- Number of glyphs
+buf.direction                      -- Current direction as string
+buf.info                           -- Array of {glyph_id, cluster, codepoint}
+buf.pos                            -- Array of {x_advance, y_advance, x_offset, y_offset}
+```
+
+#### Shaper
+
+```lua
+shaper:shape(buf, [features])              -- Shape text
+shaper:has_variations()                    -- Is variable font?
+shaper:set_variation("wght", 700)          -- Set single variation
+shaper:set_variations({wght=700, wdth=100})-- Set all variations
+shaper:set_synthetic_bold(x, y, [in_place])-- Synthetic bold
+shaper:set_synthetic_slant(slant)          -- Synthetic slant
+shaper:has_gsub() / shaper:has_gpos()      -- Table queries
+shaper:set_default_features(features)      -- Set default features
+```
+
+#### Face (metrics)
+
+```lua
+local face = ts.new_face(font)
+face.upem                          -- Units per EM
+face.ascender / face.descender     -- Vertical metrics
+face.cap_height / face.x_height
+face.postscript_name / face.family_name
+face.weight_class
+face.is_italic / face.is_fixed_pitch
+face:has_variations()              -- Variable font?
+face:variation_axes()              -- Array of {tag, min, default, max}
+```
+
+#### Feature
+
+```lua
+local feat = ts.feature("+liga")
+feat.tag                           -- Tag as string (e.g. "liga")
+feat.value                         -- Value (0=off, 1=on)
 ```
 
 ## Dimensions

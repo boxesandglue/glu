@@ -16,6 +16,7 @@ import (
 	luacxpath "github.com/speedata/glu/lua/cxpath"
 	luafrontend "github.com/speedata/glu/lua/frontend"
 	luapdf "github.com/speedata/glu/lua/pdf"
+	luatextshape "github.com/speedata/glu/lua/textshape"
 )
 
 // Version is the version of the program.
@@ -108,6 +109,7 @@ func dothings() error {
 	luafrontend.Open(l)
 	luabackend.Open(l)
 	luacxpath.Open(l)
+	luatextshape.Open(l)
 
 	// Execute the Lua file
 	if err := lua.DoFile(l, mainfile); err != nil {

@@ -4,7 +4,7 @@ import (
 	pdf "github.com/boxesandglue/baseline-pdf"
 	"github.com/boxesandglue/boxesandglue/backend/bag"
 	"github.com/boxesandglue/boxesandglue/backend/font"
-	"github.com/boxesandglue/textlayout/harfbuzz"
+	"github.com/boxesandglue/textshape/ot"
 	"github.com/speedata/go-lua"
 )
 
@@ -61,19 +61,18 @@ func fontShape(l *lua.State) int {
 	text := lua.CheckString(l, 2)
 
 	// Collect features
-	var features []harfbuzz.Feature
+	var features []ot.Feature
 	n := l.Top()
 	for i := 3; i <= n; i++ {
 		if l.IsString(i) {
 			featStr, _ := l.ToString(i)
-			feat, err := harfbuzz.ParseFeature(featStr)
-			if err == nil {
+			if feat, ok := ot.FeatureFromString(featStr); ok {
 				features = append(features, feat)
 			}
 		}
 	}
 
-	atoms := f.Value.Shape(text, features)
+	atoms := f.Value.Shape(text, features, nil)
 
 	// Return as array of atoms
 	l.NewTable()
