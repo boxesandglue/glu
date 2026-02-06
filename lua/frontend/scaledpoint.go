@@ -2,8 +2,8 @@ package frontend
 
 import (
 	"github.com/boxesandglue/boxesandglue/backend/bag"
-	"github.com/speedata/go-lua"
 	"github.com/speedata/glu/lua/common"
+	"github.com/speedata/go-lua"
 )
 
 // Re-export common functions for use within frontend package

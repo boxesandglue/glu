@@ -24,6 +24,8 @@ func openFrontend(l *lua.State) int {
 	registerImagefileMetaTable(l)
 	registerImageNodeMetaTable(l)
 	registerColorProfileMetaTable(l)
+	registerSVGDocumentMetaTable(l)
+	registerSVGNodeMetaTable(l)
 
 	// Create the frontend module table
 	lua.NewLibrary(l, []lua.RegistryFunction{
@@ -34,6 +36,8 @@ func openFrontend(l *lua.State) int {
 		{Name: "table", Function: tableNew},
 		{Name: "sp", Function: spNew},
 		{Name: "sp_string", Function: spFromString},
+		{Name: "parse_svg", Function: parseSVGFromFile},
+		{Name: "parse_svg_string", Function: parseSVGFromString},
 	})
 	return 1
 }

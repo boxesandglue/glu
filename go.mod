@@ -4,7 +4,8 @@ go 1.24.0
 
 require (
 	github.com/boxesandglue/baseline-pdf v1.1.4
-	github.com/boxesandglue/boxesandglue v0.2.4
+	github.com/boxesandglue/boxesandglue v0.2.5
+	github.com/boxesandglue/svgreader v0.0.1
 	github.com/boxesandglue/textshape v0.0.7
 	github.com/speedata/cxpath v0.0.5
 	github.com/speedata/go-lua v0.1.2

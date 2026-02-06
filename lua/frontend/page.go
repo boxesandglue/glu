@@ -3,8 +3,8 @@ package frontend
 import (
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/backend/node"
-	"github.com/speedata/go-lua"
 	"github.com/speedata/glu/lua/backend"
+	"github.com/speedata/go-lua"
 )
 
 const pageMetaTable = "Page"

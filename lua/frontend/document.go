@@ -5,9 +5,34 @@ import (
 	"path/filepath"
 
 	"github.com/boxesandglue/boxesandglue/backend/document"
+	"github.com/boxesandglue/boxesandglue/backend/node"
 	"github.com/boxesandglue/boxesandglue/frontend"
 	"github.com/speedata/go-lua"
 )
+
+// documentCreateSVGNode creates an SVG node: doc:create_svg_node(svg_doc, width, height, [default_family])
+// If a FontFamily is provided as 5th argument, text elements in the SVG are
+// rendered using the document's font system with that family as fallback.
+func documentCreateSVGNode(l *lua.State) int {
+	d := checkDocument(l, 1)
+	svgDoc := checkSVGDocument(l, 2)
+	width := checkDimension(l, 3)
+	height := optDimension(l, 4, 0)
+
+	var rule *node.Rule
+	if l.Top() >= 5 {
+		ff := checkFontFamily(l, 5)
+		tr := frontend.NewSVGTextRenderer(d.Value)
+		tr.DefaultFamily = ff.Value
+		rule = d.Value.Doc.CreateSVGNodeFromDocument(svgDoc.Value, width, height, tr)
+	} else {
+		rule = d.Value.Doc.CreateSVGNodeFromDocument(svgDoc.Value, width, height)
+	}
+
+	l.PushUserData(&SVGNode{Value: rule})
+	lua.SetMetaTableNamed(l, svgNodeMetaTable)
+	return 1
+}
 
 const documentMetaTable = "Document"
 
@@ -401,6 +426,9 @@ func documentIndex(l *lua.State) int {
 		return 1
 	case "load_colorprofile":
 		l.PushGoFunction(documentLoadColorprofile)
+		return 1
+	case "create_svg_node":
+		l.PushGoFunction(documentCreateSVGNode)
 		return 1
 	}
 

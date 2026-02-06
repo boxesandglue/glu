@@ -29,15 +29,22 @@ func dothings() error {
 	now := time.Now()
 	var loglevel string = "info"
 	var quiet bool
+	var showVersion bool
 	op := optionparser.NewOptionParser()
 	op.Banner = "glu - Lua typesetting with boxes and glue"
 	op.Coda = "\nUsage: glu [options] <filename.lua>"
 	op.On("--loglevel LVL", "Set the log level (debug, info, warn, error)", &loglevel)
 	op.On("-q", "--quiet", "Suppress output on console", &quiet)
+	op.On("-v", "--version", "Print version and exit", &showVersion)
 	op.Command("help", "Show the help message")
 	op.Command("version", "Print version and exit")
 	if err := op.Parse(); err != nil {
 		return err
+	}
+
+	if showVersion {
+		fmt.Printf("glu version %s\n", Version)
+		return nil
 	}
 
 	// Configure logger based on loglevel
