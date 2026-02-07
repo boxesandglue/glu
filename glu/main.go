@@ -12,6 +12,7 @@ import (
 	"github.com/speedata/go-lua"
 	"github.com/speedata/optionparser"
 
+	"github.com/speedata/glu/markdown"
 	luabackend "github.com/speedata/glu/lua/backend"
 	luacxpath "github.com/speedata/glu/lua/cxpath"
 	luafrontend "github.com/speedata/glu/lua/frontend"
@@ -30,12 +31,18 @@ func dothings() error {
 	var loglevel string = "info"
 	var quiet bool
 	var showVersion bool
+	var useTemplate bool
+	var cssFile string
+	var debugMarkdown bool
 	op := optionparser.NewOptionParser()
-	op.Banner = "glu - Lua typesetting with boxes and glue"
-	op.Coda = "\nUsage: glu [options] <filename.lua>"
+	op.Banner = "glu - typesetting with boxes and glue"
+	op.Coda = "\nUsage: glu [options] <filename.lua|filename.md>"
 	op.On("--loglevel LVL", "Set the log level (debug, info, warn, error)", &loglevel)
 	op.On("-q", "--quiet", "Suppress output on console", &quiet)
 	op.On("-v", "--version", "Print version and exit", &showVersion)
+	op.On("--template", "Apply Go template expansion (Markdown mode)", &useTemplate)
+	op.On("--css FILE", "Additional CSS file (Markdown mode)", &cssFile)
+	op.On("--markdown", "Print expanded Markdown to stdout (debug)", &debugMarkdown)
 	op.Command("help", "Show the help message")
 	op.Command("version", "Print version and exit")
 	if err := op.Parse(); err != nil {
@@ -77,7 +84,7 @@ func dothings() error {
 	}
 
 	if mainfile == "" {
-		return fmt.Errorf("usage: %s <filename.lua>", os.Args[0])
+		return fmt.Errorf("usage: %s <filename.lua|filename.md>", os.Args[0])
 	}
 	// logfile is main file with .log extension
 	ext := filepath.Ext(mainfile)
@@ -118,10 +125,24 @@ func dothings() error {
 	luacxpath.Open(l)
 	luatextshape.Open(l)
 
-	// Execute the Lua file
-	if err := lua.DoFile(l, mainfile); err != nil {
-		return fmt.Errorf("lua error: %v", err)
+	switch ext {
+	case ".lua":
+		if err := lua.DoFile(l, mainfile); err != nil {
+			return fmt.Errorf("lua error: %v", err)
+		}
+	case ".md":
+		opts := markdown.Options{
+			Template:      useTemplate,
+			CSSFile:       cssFile,
+			DebugMarkdown: debugMarkdown,
+		}
+		if err := markdown.ProcessFile(l, mainfile, opts); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported file extension: %s (expected .lua or .md)", ext)
 	}
+
 	elapsed := time.Since(now)
 	logger.Info("Transcript written", "file", logfilename)
 	logger.Info("Total duration", "duration", elapsed.String())

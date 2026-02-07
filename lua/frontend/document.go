@@ -61,6 +61,11 @@ func documentNew(l *lua.State) int {
 		return 0
 	}
 
+	// Install pre_shipout callback hook on this document
+	if registry != nil {
+		registry.InstallPreShipout(doc)
+	}
+
 	l.PushUserData(&Document{Value: doc})
 	lua.SetMetaTableNamed(l, documentMetaTable)
 	return 1

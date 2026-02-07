@@ -26,27 +26,30 @@ func checkPage(l *lua.State, index int) *Page {
 
 // pageOutputAt places a VList at position: page:output_at(x, y, vlist)
 // x, y can be numbers (points) or strings with units ("72pt", "1in", "2cm")
-// vlist can be either a frontend VList or a backend node.VList
+// vlist can be a frontend VList, backend node.VList, or SVGNode (auto-vpacked).
 func pageOutputAt(l *lua.State) int {
 	p := checkPage(l, 1)
 	x := checkDimension(l, 2)
 	y := checkDimension(l, 3)
 
-	// Try to get the VList - accept both frontend VList and backend node.VList
+	// Try to get the VList - accept frontend VList, backend node.VList, and SVGNode
 	var vl *node.VList
 	if ud := lua.TestUserData(l, 4, vlistMetaTable); ud != nil {
 		if v, ok := ud.(*VList); ok {
 			vl = v.Value
 		}
 	} else if ud := lua.TestUserData(l, 4, "node.VList"); ud != nil {
-		// Backend NodeVList wrapper
 		if v, ok := ud.(*backend.NodeVList); ok {
 			vl = v.Value
+		}
+	} else if ud := lua.TestUserData(l, 4, svgNodeMetaTable); ud != nil {
+		if v, ok := ud.(*SVGNode); ok {
+			vl = node.Vpack(v.Value)
 		}
 	}
 
 	if vl == nil {
-		lua.Errorf(l, "VList expected")
+		lua.Errorf(l, "VList or SVGNode expected")
 		return 0
 	}
 

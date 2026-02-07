@@ -38,12 +38,16 @@ func openFrontend(l *lua.State) int {
 		{Name: "sp_string", Function: spFromString},
 		{Name: "parse_svg", Function: parseSVGFromFile},
 		{Name: "parse_svg_string", Function: parseSVGFromString},
+		{Name: "add_callback", Function: luaAddCallback},
+		{Name: "remove_callback", Function: luaRemoveCallback},
+		{Name: "list_callbacks", Function: luaListCallbacks},
 	})
 	return 1
 }
 
 // Open registers the frontend module for require() in the Lua state.
 func Open(l *lua.State) {
+	InitRegistry(l)
 	lua.Require(l, "glu.frontend", openFrontend, false)
 	l.Pop(1)
 }
