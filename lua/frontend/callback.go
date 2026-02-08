@@ -6,6 +6,7 @@ import (
 
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	fe "github.com/boxesandglue/boxesandglue/frontend"
+	"github.com/boxesandglue/htmlbag"
 	"github.com/speedata/go-lua"
 )
 
@@ -17,9 +18,16 @@ type callbackEntry struct {
 
 // CallbackRegistry manages named, ordered callbacks per event.
 type CallbackRegistry struct {
-	l       *lua.State
-	feDoc   *fe.Document // set when a document is created
-	entries map[string][]*callbackEntry
+	l          *lua.State
+	feDoc      *fe.Document        // set when a document is created
+	cssBuilder *htmlbag.CSSBuilder // set after CSS builder is created
+	entries    map[string][]*callbackEntry
+}
+
+// SetCSSBuilder stores the CSSBuilder reference so that callbacks
+// can access page dimensions and CSS information.
+func (cr *CallbackRegistry) SetCSSBuilder(cb *htmlbag.CSSBuilder) {
+	cr.cssBuilder = cb
 }
 
 // package-level registry, initialized in Open()
@@ -132,12 +140,81 @@ func (cr *CallbackRegistry) InstallPreShipout(feDoc *fe.Document) {
 			lua.SetMetaTableNamed(l, pageMetaTable)
 			// arg 3: page number
 			l.PushInteger(pagenum)
-			return 3
+			// arg 4: PageInfo (page dimensions + CSS access)
+			if cr.cssBuilder != nil {
+				if pd, err := cr.cssBuilder.PageSize(); err == nil {
+					l.PushUserData(&PageInfo{
+						cssBuilder: cr.cssBuilder,
+						dimensions: pd,
+					})
+					lua.SetMetaTableNamed(l, pageInfoMetaTable)
+				} else {
+					l.PushNil()
+				}
+			} else {
+				l.PushNil()
+			}
+			return 4
 		})
 		if err != nil {
 			slog.Error("pre_shipout callback error", "error", err)
 		}
 	})
+}
+
+// InstallPostElement registers a Go-level ElementCallback on the CSSBuilder
+// that fires all registered Lua "post_element" callbacks.
+func (cr *CallbackRegistry) InstallPostElement() {
+	cr.cssBuilder.ElementCallback = func(event htmlbag.ElementEvent) {
+		err := cr.Fire("post_element", func(l *lua.State) int {
+			// arg 1: ElementInfo
+			l.PushUserData(&ElementInfo{event: event})
+			lua.SetMetaTableNamed(l, elementInfoMetaTable)
+			// arg 2: Document (for creating SVG nodes etc.)
+			if cr.feDoc != nil {
+				l.PushUserData(&Document{Value: cr.feDoc})
+				lua.SetMetaTableNamed(l, documentMetaTable)
+				return 2
+			}
+			return 1
+		})
+		if err != nil {
+			slog.Error("post_element callback error", "error", err)
+		}
+	}
+}
+
+// InstallPageInit registers a Go-level PageInitCallback on the CSSBuilder
+// that fires all registered Lua "page_init" callbacks.
+func (cr *CallbackRegistry) InstallPageInit() {
+	cr.cssBuilder.PageInitCallback = func() {
+		page := cr.feDoc.Doc.CurrentPage
+		pagenum := len(cr.feDoc.Doc.Pages)
+		err := cr.Fire("page_init", func(l *lua.State) int {
+			// arg 1: Document
+			l.PushUserData(&Document{Value: cr.feDoc})
+			lua.SetMetaTableNamed(l, documentMetaTable)
+			// arg 2: Page
+			l.PushUserData(&Page{Value: page})
+			lua.SetMetaTableNamed(l, pageMetaTable)
+			// arg 3: page number
+			l.PushInteger(pagenum)
+			// arg 4: PageInfo
+			if pd, err := cr.cssBuilder.PageSize(); err == nil {
+				l.PushUserData(&PageInfo{
+					cssBuilder: cr.cssBuilder,
+					dimensions: pd,
+				})
+				lua.SetMetaTableNamed(l, pageInfoMetaTable)
+			} else {
+				l.PushNil()
+			}
+			return 4
+		})
+		if err != nil {
+			slog.Error("page_init callback error", "error", err)
+		}
+	}
 }
 
 // --- Position types ---

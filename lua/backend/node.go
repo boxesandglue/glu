@@ -386,6 +386,17 @@ func glueIndex(l *lua.State) int {
 	case "shrink_order":
 		l.PushInteger(int(g.ShrinkOrder))
 		return 1
+	case "leader":
+		if g.Leader != nil {
+			l.PushUserData(&NodeHList{Value: g.Leader})
+			lua.SetMetaTableNamed(l, hlistMetaTable)
+		} else {
+			l.PushNil()
+		}
+		return 1
+	case "leader_type":
+		l.PushInteger(int(g.LeaderType))
+		return 1
 	}
 	return nodeGenericIndex(l, g)
 }
@@ -406,6 +417,15 @@ func glueNewIndex(l *lua.State) int {
 		g.StretchOrder = node.GlueOrder(lua.CheckInteger(l, 3))
 	case "shrink_order":
 		g.ShrinkOrder = node.GlueOrder(lua.CheckInteger(l, 3))
+	case "leader":
+		nd := getNode(l, 3)
+		if nd == nil {
+			g.Leader = nil
+		} else if hl, ok := nd.(*node.HList); ok {
+			g.Leader = hl
+		}
+	case "leader_type":
+		g.LeaderType = node.LeaderType(lua.CheckInteger(l, 3))
 	default:
 		nodeGenericNewIndex(l, g)
 	}
@@ -897,6 +917,14 @@ func openNode(l *lua.State) int {
 	l.SetField(-2, "fill")
 	l.PushInteger(int(node.StretchFilll))
 	l.SetField(-2, "filll")
+
+	// Add leader type constants
+	l.PushInteger(int(node.LeaderAligned))
+	l.SetField(-2, "leader_aligned")
+	l.PushInteger(int(node.LeaderCentered))
+	l.SetField(-2, "leader_centered")
+	l.PushInteger(int(node.LeaderExpanded))
+	l.SetField(-2, "leader_expanded")
 
 	return 1
 }

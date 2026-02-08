@@ -3,6 +3,7 @@ package frontend
 import (
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/backend/node"
+	"github.com/boxesandglue/htmlbag"
 	"github.com/speedata/glu/lua/backend"
 	"github.com/speedata/go-lua"
 )
@@ -85,9 +86,38 @@ func pageIndex(l *lua.State) int {
 	case "height":
 		pushScaledPoint(l, p.Value.Height)
 		return 1
+	case "margin_top", "margin_bottom", "margin_left", "margin_right":
+		if pd := getPageDimensions(p.Value); pd != nil {
+			switch key {
+			case "margin_top":
+				pushScaledPoint(l, pd.MarginTop)
+			case "margin_bottom":
+				pushScaledPoint(l, pd.MarginBottom)
+			case "margin_left":
+				pushScaledPoint(l, pd.MarginLeft)
+			case "margin_right":
+				pushScaledPoint(l, pd.MarginRight)
+			}
+			return 1
+		}
+		pushScaledPoint(l, 0)
+		return 1
 	}
 
 	return 0
+}
+
+// getPageDimensions retrieves the PageDimensions stored in Page.Userdata by htmlbag.
+func getPageDimensions(page *document.Page) *htmlbag.PageDimensions {
+	if page.Userdata == nil {
+		return nil
+	}
+	if v, ok := page.Userdata[htmlbag.PageDimensionsKey]; ok {
+		if pd, ok := v.(htmlbag.PageDimensions); ok {
+			return &pd
+		}
+	}
+	return nil
 }
 
 // pageNewIndex handles attribute setting (__newindex metamethod)

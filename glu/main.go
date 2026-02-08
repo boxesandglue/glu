@@ -12,12 +12,12 @@ import (
 	"github.com/speedata/go-lua"
 	"github.com/speedata/optionparser"
 
-	"github.com/speedata/glu/markdown"
 	luabackend "github.com/speedata/glu/lua/backend"
 	luacxpath "github.com/speedata/glu/lua/cxpath"
 	luafrontend "github.com/speedata/glu/lua/frontend"
 	luapdf "github.com/speedata/glu/lua/pdf"
 	luatextshape "github.com/speedata/glu/lua/textshape"
+	"github.com/speedata/glu/markdown"
 )
 
 // Version is the version of the program.
@@ -34,15 +34,19 @@ func dothings() error {
 	var useTemplate bool
 	var cssFile string
 	var debugMarkdown bool
+	var debugHTML bool
+	var clean bool
 	op := optionparser.NewOptionParser()
 	op.Banner = "glu - typesetting with boxes and glue"
-	op.Coda = "\nUsage: glu [options] <filename.lua|filename.md>"
+	op.Coda = "\nUsage: glu [options] <filename.lua|filename.md|filename.html>"
 	op.On("--loglevel LVL", "Set the log level (debug, info, warn, error)", &loglevel)
 	op.On("-q", "--quiet", "Suppress output on console", &quiet)
 	op.On("-v", "--version", "Print version and exit", &showVersion)
 	op.On("--template", "Apply Go template expansion (Markdown mode)", &useTemplate)
-	op.On("--css FILE", "Additional CSS file (Markdown mode)", &cssFile)
+	op.On("--css FILE", "Additional CSS file", &cssFile)
 	op.On("--markdown", "Print expanded Markdown to stdout (debug)", &debugMarkdown)
+	op.On("--html", "Print generated HTML to stdout (debug, Markdown mode)", &debugHTML)
+	op.On("--clean", "Remove auxiliary files before processing", &clean)
 	op.Command("help", "Show the help message")
 	op.Command("version", "Print version and exit")
 	if err := op.Parse(); err != nil {
@@ -112,6 +116,13 @@ func dothings() error {
 	bag.SetLogger(logger)
 	pdf.Logger = logger
 
+	if clean {
+		auxFile := mainfile[0:len(mainfile)-len(ext)] + ".aux"
+		if err := os.Remove(auxFile); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing %s: %w", auxFile, err)
+		}
+	}
+
 	logger.Info("Start processing", "file", mainfile, "glu version", Version, "date", time.Now().Format(time.RFC3339))
 
 	// Create Lua state
@@ -135,12 +146,20 @@ func dothings() error {
 			Template:      useTemplate,
 			CSSFile:       cssFile,
 			DebugMarkdown: debugMarkdown,
+			DebugHTML:     debugHTML,
 		}
 		if err := markdown.ProcessFile(l, mainfile, opts); err != nil {
 			return err
 		}
+	case ".html", ".htm":
+		opts := markdown.Options{
+			CSSFile: cssFile,
+		}
+		if err := markdown.ProcessHTMLFile(l, mainfile, opts); err != nil {
+			return err
+		}
 	default:
-		return fmt.Errorf("unsupported file extension: %s (expected .lua or .md)", ext)
+		return fmt.Errorf("unsupported file extension: %s (expected .lua, .md, or .html)", ext)
 	}
 
 	elapsed := time.Since(now)

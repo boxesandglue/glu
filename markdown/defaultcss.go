@@ -91,12 +91,14 @@ table {
 
 th {
 	font-weight: bold;
-	padding: 4pt 8pt;
+	padding: 2pt 6pt;
 	border-bottom: 1pt solid black;
+	line-height: 1.2;
 }
 
 td {
-	padding: 4pt 8pt;
+	padding: 2pt 6pt;
+	line-height: 1.2;
 }
 
 ul, ol {

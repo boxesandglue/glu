@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -15,15 +16,85 @@ import (
 	"github.com/speedata/go-lua"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
+	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
 	luafrontend "github.com/speedata/glu/lua/frontend"
 )
 
+// auxHeading stores a heading entry in the aux file.
+type auxHeading struct {
+	Level string `json:"level"`
+	Text  string `json:"text"`
+	Page  int    `json:"page"`
+}
+
+// auxData holds cross-run information that requires multiple passes.
+type auxData struct {
+	Pages    int          `json:"pages"`
+	Headings []auxHeading `json:"headings,omitempty"`
+}
+
+// readAuxFile reads a previously written aux file. If the file does not exist
+// it returns zero-valued auxData and no error.
+func readAuxFile(auxPath string) (auxData, error) {
+	var ad auxData
+	data, err := os.ReadFile(auxPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ad, nil
+		}
+		return ad, err
+	}
+	if err := json.Unmarshal(data, &ad); err != nil {
+		return ad, fmt.Errorf("parsing %s: %w", auxPath, err)
+	}
+	return ad, nil
+}
+
+// writeAuxFile writes aux data to disk and returns true if any value changed
+// compared to the old data (i.e. a rerun is needed).
+func writeAuxFile(auxPath string, old, cur auxData) (bool, error) {
+	data, err := json.Marshal(cur)
+	if err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(auxPath, data, 0644); err != nil {
+		return false, err
+	}
+	changed := old.Pages != cur.Pages || len(old.Headings) != len(cur.Headings)
+	if !changed {
+		for i := range old.Headings {
+			if old.Headings[i] != cur.Headings[i] {
+				changed = true
+				break
+			}
+		}
+	}
+	return changed, nil
+}
+
+// setTOCGlobal pushes the _toc Lua global from the aux heading data.
+func setTOCGlobal(l *lua.State, headings []auxHeading) {
+	l.NewTable()
+	for i, h := range headings {
+		l.NewTable()
+		l.PushString(h.Level)
+		l.SetField(-2, "level")
+		l.PushString(h.Text)
+		l.SetField(-2, "text")
+		l.PushInteger(h.Page)
+		l.SetField(-2, "page")
+		l.RawSetInt(-2, i+1)
+	}
+	l.SetGlobal("_toc")
+}
+
 // Options controls the Markdown processing pipeline.
 type Options struct {
-	Template    bool   // apply Go template expansion before processing
-	CSSFile     string // additional CSS file to load
-	DebugMarkdown bool // print expanded Markdown to stdout instead of generating PDF
+	Template      bool   // apply Go template expansion before processing
+	CSSFile       string // additional CSS file to load
+	DebugMarkdown bool   // print expanded Markdown to stdout instead of generating PDF
+	DebugHTML     bool   // print generated HTML to stdout instead of generating PDF
 }
 
 // ProcessFile reads a Markdown file and produces a PDF.
@@ -50,6 +121,15 @@ func ProcessFile(l *lua.State, filename string, opts Options) error {
 	// Step 2: Extract YAML front matter
 	fm, body := extractFrontmatter(source)
 	slog.Debug("Frontmatter", "title", fm.Title, "author", fm.Author, "papersize", fm.Papersize, "css", fm.CSS)
+
+	// Read aux data early so _toc is available to Lua blocks.
+	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
+	auxPath := strings.TrimSuffix(outputFilename, filepath.Ext(outputFilename)) + ".aux"
+	earlyAux, err := readAuxFile(auxPath)
+	if err != nil {
+		return fmt.Errorf("reading aux file: %w", err)
+	}
+	setTOCGlobal(l, earlyAux.Headings)
 
 	// Step 3: Load companion Lua file (e.g. example.lua for example.md)
 	luaFile := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".lua"
@@ -79,11 +159,16 @@ func ProcessFile(l *lua.State, filename string, opts Options) error {
 	}
 
 	// Step 5: Markdown → HTML
-	gm := goldmark.New(goldmark.WithExtensions(
-		extension.Table,
-		extension.Strikethrough,
-		extension.Linkify,
-	))
+	gm := goldmark.New(
+		goldmark.WithExtensions(
+			extension.Table,
+			extension.Strikethrough,
+			extension.Linkify,
+		),
+		goldmark.WithRendererOptions(
+			goldmarkhtml.WithUnsafe(),
+		),
+	)
 	var htmlBuf bytes.Buffer
 	if err := gm.Convert([]byte(body), &htmlBuf); err != nil {
 		return fmt.Errorf("goldmark convert: %w", err)
@@ -91,12 +176,135 @@ func ProcessFile(l *lua.State, filename string, opts Options) error {
 	htmlStr := htmlBuf.String()
 	slog.Debug("HTML generated", "length", len(htmlStr))
 
+	// Debug mode: print generated HTML and exit
+	if opts.DebugHTML {
+		fmt.Print(htmlStr)
+		return nil
+	}
+
 	// Step 6: HTML → PDF via htmlbag
-	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
-	return generatePDF(outputFilename, htmlStr, fm, opts)
+	return generatePDF(l, outputFilename, htmlStr, fm, opts)
 }
 
-func generatePDF(outputFilename string, htmlStr string, fm Frontmatter, opts Options) error {
+// ProcessHTMLFile reads an HTML file and produces a PDF.
+// Unlike Markdown mode, no default CSS is applied — styling comes from
+// <link>, <style>, inline styles, or the --css flag.
+func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", filename, err)
+	}
+	htmlStr := string(data)
+
+	// Load companion Lua file (e.g. page.lua for page.html)
+	luaFile := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".lua"
+	if _, err := os.Stat(luaFile); err == nil {
+		slog.Info("Loading companion Lua file", "file", luaFile)
+		if err := lua.DoFile(l, luaFile); err != nil {
+			return fmt.Errorf("companion lua file %s: %w", luaFile, err)
+		}
+	}
+
+	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
+
+	// Read aux data from a previous run (for forward references like counter(pages)).
+	auxPath := strings.TrimSuffix(outputFilename, ".pdf") + ".aux"
+	oldAux, err := readAuxFile(auxPath)
+	if err != nil {
+		return fmt.Errorf("reading aux file: %w", err)
+	}
+
+	// Set _toc global from previous run's heading data.
+	setTOCGlobal(l, oldAux.Headings)
+
+	fe, err := frontend.New(outputFilename)
+	if err != nil {
+		return fmt.Errorf("creating document: %w", err)
+	}
+
+	cssParser := csshtml.NewCSSParserWithDefaults()
+	// Set the directory so relative CSS paths (in <link> or @import) resolve correctly.
+	abs, err := filepath.Abs(filepath.Dir(filename))
+	if err != nil {
+		return fmt.Errorf("resolving path: %w", err)
+	}
+	cssParser.PushDir(abs)
+
+	cb, err := htmlbag.New(fe, cssParser)
+	if err != nil {
+		return fmt.Errorf("creating CSS builder: %w", err)
+	}
+	cb.Counters["pages"] = oldAux.Pages
+
+	// Install callbacks
+	if cr := luafrontend.GetRegistry(); cr != nil {
+		cr.SetCSSBuilder(cb)
+		cr.InstallPreShipout(fe)
+		cr.InstallPostElement()
+		cr.InstallPageInit()
+	}
+
+	// Load CSS from CLI flag
+	if opts.CSSFile != "" {
+		if err := cb.ReadCSSFile(opts.CSSFile); err != nil {
+			return fmt.Errorf("reading CSS file %s: %w", opts.CSSFile, err)
+		}
+	}
+
+	// Convert HTML to text elements first — this processes <link> and <style>
+	// tags, making @page rules available for page initialization.
+	te, err := cb.HTMLToText(htmlStr)
+	if err != nil {
+		return fmt.Errorf("HTML to text: %w", err)
+	}
+
+	// Initialize the page (now @page rules from <style> are available)
+	pd, err := cb.PageSize()
+	if err != nil {
+		return fmt.Errorf("getting page size: %w", err)
+	}
+
+	// Build vertical list
+	vl, err := cb.CreateVlist(te, pd.ContentWidth)
+	if err != nil {
+		return fmt.Errorf("creating vlist: %w", err)
+	}
+
+	// Distribute content across pages
+	if err := cb.OutputPages(vl); err != nil {
+		return fmt.Errorf("outputting pages: %w", err)
+	}
+
+	// Write aux file with values from this run.
+	curAux := auxData{Pages: len(fe.Doc.Pages)}
+	for _, h := range cb.Headings {
+		curAux.Headings = append(curAux.Headings, auxHeading{Level: h.Level, Text: h.Text, Page: h.Page})
+	}
+	if changed, err := writeAuxFile(auxPath, oldAux, curAux); err != nil {
+		return fmt.Errorf("writing aux file: %w", err)
+	} else if changed {
+		slog.Info("Aux data changed — rerun to update cross-references", "pages", curAux.Pages)
+	}
+
+	if err := fe.Finish(); err != nil {
+		return fmt.Errorf("finishing document: %w", err)
+	}
+
+	slog.Info("PDF written", "file", outputFilename, "pages", len(fe.Doc.Pages))
+	return nil
+}
+
+func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontmatter, opts Options) error {
+	// Read aux data from a previous run (for forward references like counter(pages)).
+	auxPath := strings.TrimSuffix(outputFilename, filepath.Ext(outputFilename)) + ".aux"
+	oldAux, err := readAuxFile(auxPath)
+	if err != nil {
+		return fmt.Errorf("reading aux file: %w", err)
+	}
+
+	// Set _toc global from previous run's heading data.
+	setTOCGlobal(l, oldAux.Headings)
+
 	fe, err := frontend.New(outputFilename)
 	if err != nil {
 		return fmt.Errorf("creating document: %w", err)
@@ -109,15 +317,20 @@ func generatePDF(outputFilename string, htmlStr string, fm Frontmatter, opts Opt
 		fe.Doc.Author = fm.Author
 	}
 
-	// Install pre_shipout callback hook so Lua callbacks fire on Shipout
-	if cr := luafrontend.GetRegistry(); cr != nil {
-		cr.InstallPreShipout(fe)
-	}
-
 	cssParser := csshtml.NewCSSParserWithDefaults()
 	cb, err := htmlbag.New(fe, cssParser)
 	if err != nil {
 		return fmt.Errorf("creating CSS builder: %w", err)
+	}
+	cb.Counters["pages"] = oldAux.Pages
+
+	// Install pre_shipout callback hook so Lua callbacks fire on Shipout.
+	// Must happen after CSSBuilder creation so PageInfo is available.
+	if cr := luafrontend.GetRegistry(); cr != nil {
+		cr.SetCSSBuilder(cb)
+		cr.InstallPreShipout(fe)
+		cr.InstallPostElement()
+		cr.InstallPageInit()
 	}
 
 	// Load default Markdown CSS
@@ -169,15 +382,26 @@ func generatePDF(outputFilename string, htmlStr string, fm Frontmatter, opts Opt
 		return fmt.Errorf("creating vlist: %w", err)
 	}
 
-	// Place on page
-	fe.Doc.CurrentPage.OutputAt(pd.MarginLeft, pd.Height-pd.MarginTop, vl)
+	// Distribute content across pages (with automatic page breaks)
+	if err := cb.OutputPages(vl); err != nil {
+		return fmt.Errorf("outputting pages: %w", err)
+	}
 
-	// Finalize
-	fe.Doc.CurrentPage.Shipout()
+	// Write aux file with values from this run.
+	curAux := auxData{Pages: len(fe.Doc.Pages)}
+	for _, h := range cb.Headings {
+		curAux.Headings = append(curAux.Headings, auxHeading{Level: h.Level, Text: h.Text, Page: h.Page})
+	}
+	if changed, err := writeAuxFile(auxPath, oldAux, curAux); err != nil {
+		return fmt.Errorf("writing aux file: %w", err)
+	} else if changed {
+		slog.Info("Aux data changed — rerun to update cross-references", "pages", curAux.Pages)
+	}
+
 	if err := fe.Finish(); err != nil {
 		return fmt.Errorf("finishing document: %w", err)
 	}
 
-	slog.Info("PDF written", "file", outputFilename)
+	slog.Info("PDF written", "file", outputFilename, "pages", len(fe.Doc.Pages))
 	return nil
 }
