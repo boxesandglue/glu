@@ -18,75 +18,75 @@ import (
 	"github.com/yuin/goldmark/extension"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
+	luacommon "github.com/speedata/glu/lua/common"
 	luafrontend "github.com/speedata/glu/lua/frontend"
 )
 
-// auxHeading stores a heading entry in the aux file.
-type auxHeading struct {
-	Level string `json:"level"`
-	Text  string `json:"text"`
-	Page  int    `json:"page"`
-}
-
-// auxData holds cross-run information that requires multiple passes.
-type auxData struct {
-	Pages    int          `json:"pages"`
-	Headings []auxHeading `json:"headings,omitempty"`
-}
-
 // readAuxFile reads a previously written aux file. If the file does not exist
-// it returns zero-valued auxData and no error.
-func readAuxFile(auxPath string) (auxData, error) {
-	var ad auxData
+// it returns an empty map and no error.
+func readAuxFile(auxPath string) (map[string]any, error) {
 	data, err := os.ReadFile(auxPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return ad, nil
+			return make(map[string]any), nil
 		}
-		return ad, err
+		return nil, err
 	}
-	if err := json.Unmarshal(data, &ad); err != nil {
-		return ad, fmt.Errorf("parsing %s: %w", auxPath, err)
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", auxPath, err)
 	}
-	return ad, nil
+	if m == nil {
+		m = make(map[string]any)
+	}
+	return m, nil
 }
 
 // writeAuxFile writes aux data to disk and returns true if any value changed
 // compared to the old data (i.e. a rerun is needed).
-func writeAuxFile(auxPath string, old, cur auxData) (bool, error) {
-	data, err := json.Marshal(cur)
+func writeAuxFile(auxPath string, old, cur map[string]any) (bool, error) {
+	data, err := json.MarshalIndent(cur, "", "  ")
 	if err != nil {
 		return false, err
 	}
 	if err := os.WriteFile(auxPath, data, 0644); err != nil {
 		return false, err
 	}
-	changed := old.Pages != cur.Pages || len(old.Headings) != len(cur.Headings)
-	if !changed {
-		for i := range old.Headings {
-			if old.Headings[i] != cur.Headings[i] {
-				changed = true
-				break
-			}
-		}
-	}
-	return changed, nil
+	oldData, _ := json.MarshalIndent(old, "", "  ")
+	return !bytes.Equal(oldData, data), nil
 }
 
-// setTOCGlobal pushes the _toc Lua global from the aux heading data.
-func setTOCGlobal(l *lua.State, headings []auxHeading) {
-	l.NewTable()
-	for i, h := range headings {
-		l.NewTable()
-		l.PushString(h.Level)
-		l.SetField(-2, "level")
-		l.PushString(h.Text)
-		l.SetField(-2, "text")
-		l.PushInteger(h.Page)
-		l.SetField(-2, "page")
-		l.RawSetInt(-2, i+1)
+// fireCallback fires a lifecycle callback if the registry is available.
+func fireCallback(event string) error {
+	if cr := luafrontend.GetRegistry(); cr != nil {
+		return cr.Fire(event, nil)
 	}
+	return nil
+}
+
+// setAuxGlobal sets the _aux Lua global from the aux map and also sets
+// _toc to _aux._headings for backward compatibility.
+func setAuxGlobal(l *lua.State, data map[string]any) {
+	luacommon.PushAny(l, any(data))
+	l.SetGlobal("_aux")
+
+	// Backward compat: _toc = _aux._headings
+	l.Global("_aux")
+	l.Field(-1, "_headings")
 	l.SetGlobal("_toc")
+	l.Pop(1) // pop _aux
+}
+
+// readAuxGlobal reads the _aux Lua global back into a Go map.
+func readAuxGlobal(l *lua.State) map[string]any {
+	l.Global("_aux")
+	defer l.Pop(1)
+	if l.IsTable(-1) {
+		if m, ok := luacommon.LuaToGo(l, -1).(map[string]any); ok {
+			return m
+		}
+	}
+	return make(map[string]any)
 }
 
 // Options controls the Markdown processing pipeline.
@@ -122,22 +122,33 @@ func ProcessFile(l *lua.State, filename string, opts Options) error {
 	fm, body := extractFrontmatter(source)
 	slog.Debug("Frontmatter", "title", fm.Title, "author", fm.Author, "papersize", fm.Papersize, "css", fm.CSS)
 
-	// Read aux data early so _toc is available to Lua blocks.
-	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
-	auxPath := strings.TrimSuffix(outputFilename, filepath.Ext(outputFilename)) + ".aux"
-	earlyAux, err := readAuxFile(auxPath)
-	if err != nil {
-		return fmt.Errorf("reading aux file: %w", err)
-	}
-	setTOCGlobal(l, earlyAux.Headings)
-
 	// Step 3: Load companion Lua file (e.g. example.lua for example.md)
+	// Loaded before aux so that lifecycle callbacks can be registered.
 	luaFile := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".lua"
 	if _, err := os.Stat(luaFile); err == nil {
 		slog.Info("Loading companion Lua file", "file", luaFile)
 		if err := lua.DoFile(l, luaFile); err != nil {
 			return fmt.Errorf("companion lua file %s: %w", luaFile, err)
 		}
+	}
+
+	// Fire document_start callback (before aux file is loaded).
+	if err := fireCallback("document_start"); err != nil {
+		return fmt.Errorf("document_start callback: %w", err)
+	}
+
+	// Read aux data so _aux/_toc are available to Lua blocks.
+	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
+	auxPath := strings.TrimSuffix(outputFilename, filepath.Ext(outputFilename)) + "-aux.json"
+	earlyAux, err := readAuxFile(auxPath)
+	if err != nil {
+		return fmt.Errorf("reading aux file: %w", err)
+	}
+	setAuxGlobal(l, earlyAux)
+
+	// Fire content_ready callback (aux loaded, before content processing).
+	if err := fireCallback("content_ready"); err != nil {
+		return fmt.Errorf("content_ready callback: %w", err)
 	}
 
 	// Step 4: Execute Lua blocks
@@ -205,17 +216,22 @@ func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
 		}
 	}
 
+	// Fire document_start callback (before aux file is loaded).
+	if err := fireCallback("document_start"); err != nil {
+		return fmt.Errorf("document_start callback: %w", err)
+	}
+
 	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
 
 	// Read aux data from a previous run (for forward references like counter(pages)).
-	auxPath := strings.TrimSuffix(outputFilename, ".pdf") + ".aux"
+	auxPath := strings.TrimSuffix(outputFilename, ".pdf") + "-aux.json"
 	oldAux, err := readAuxFile(auxPath)
 	if err != nil {
 		return fmt.Errorf("reading aux file: %w", err)
 	}
 
-	// Set _toc global from previous run's heading data.
-	setTOCGlobal(l, oldAux.Headings)
+	// Set _aux and _toc globals from previous run's data.
+	setAuxGlobal(l, oldAux)
 
 	fe, err := frontend.New(outputFilename)
 	if err != nil {
@@ -234,7 +250,9 @@ func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("creating CSS builder: %w", err)
 	}
-	cb.Counters["pages"] = oldAux.Pages
+	if pages, ok := oldAux["_pages"].(float64); ok {
+		cb.Counters["pages"] = int(pages)
+	}
 
 	// Install callbacks
 	if cr := luafrontend.GetRegistry(); cr != nil {
@@ -249,6 +267,11 @@ func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
 		if err := cb.ReadCSSFile(opts.CSSFile); err != nil {
 			return fmt.Errorf("reading CSS file %s: %w", opts.CSSFile, err)
 		}
+	}
+
+	// Fire content_ready callback (aux loaded, before content processing).
+	if err := fireCallback("content_ready"); err != nil {
+		return fmt.Errorf("content_ready callback: %w", err)
 	}
 
 	// Convert HTML to text elements first — this processes <link> and <style>
@@ -275,19 +298,27 @@ func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
 		return fmt.Errorf("outputting pages: %w", err)
 	}
 
-	// Write aux file with values from this run.
-	curAux := auxData{Pages: len(fe.Doc.Pages)}
-	for _, h := range cb.Headings {
-		curAux.Headings = append(curAux.Headings, auxHeading{Level: h.Level, Text: h.Text, Page: h.Page})
+	if err := fe.Finish(); err != nil {
+		return fmt.Errorf("finishing document: %w", err)
 	}
+
+	// Fire document_end callback (PDF has been written).
+	if err := fireCallback("document_end"); err != nil {
+		return fmt.Errorf("document_end callback: %w", err)
+	}
+
+	// Read _aux back from Lua (user may have modified it) and update system keys.
+	curAux := readAuxGlobal(l)
+	curAux["_pages"] = len(fe.Doc.Pages)
+	headings := make([]any, len(cb.Headings))
+	for i, h := range cb.Headings {
+		headings[i] = map[string]any{"level": h.Level, "text": h.Text, "page": h.Page}
+	}
+	curAux["_headings"] = headings
 	if changed, err := writeAuxFile(auxPath, oldAux, curAux); err != nil {
 		return fmt.Errorf("writing aux file: %w", err)
 	} else if changed {
-		slog.Info("Aux data changed — rerun to update cross-references", "pages", curAux.Pages)
-	}
-
-	if err := fe.Finish(); err != nil {
-		return fmt.Errorf("finishing document: %w", err)
+		slog.Info("Aux data changed — rerun to update cross-references")
 	}
 
 	slog.Info("PDF written", "file", outputFilename, "pages", len(fe.Doc.Pages))
@@ -295,15 +326,13 @@ func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
 }
 
 func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontmatter, opts Options) error {
-	// Read aux data from a previous run (for forward references like counter(pages)).
-	auxPath := strings.TrimSuffix(outputFilename, filepath.Ext(outputFilename)) + ".aux"
+	// Read aux data from a previous run (for pages counter and change detection).
+	// _aux/_toc globals are already set by ProcessFile.
+	auxPath := strings.TrimSuffix(outputFilename, filepath.Ext(outputFilename)) + "-aux.json"
 	oldAux, err := readAuxFile(auxPath)
 	if err != nil {
 		return fmt.Errorf("reading aux file: %w", err)
 	}
-
-	// Set _toc global from previous run's heading data.
-	setTOCGlobal(l, oldAux.Headings)
 
 	fe, err := frontend.New(outputFilename)
 	if err != nil {
@@ -322,7 +351,9 @@ func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontma
 	if err != nil {
 		return fmt.Errorf("creating CSS builder: %w", err)
 	}
-	cb.Counters["pages"] = oldAux.Pages
+	if pages, ok := oldAux["_pages"].(float64); ok {
+		cb.Counters["pages"] = int(pages)
+	}
 
 	// Install pre_shipout callback hook so Lua callbacks fire on Shipout.
 	// Must happen after CSSBuilder creation so PageInfo is available.
@@ -387,19 +418,27 @@ func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontma
 		return fmt.Errorf("outputting pages: %w", err)
 	}
 
-	// Write aux file with values from this run.
-	curAux := auxData{Pages: len(fe.Doc.Pages)}
-	for _, h := range cb.Headings {
-		curAux.Headings = append(curAux.Headings, auxHeading{Level: h.Level, Text: h.Text, Page: h.Page})
+	if err := fe.Finish(); err != nil {
+		return fmt.Errorf("finishing document: %w", err)
 	}
+
+	// Fire document_end callback (PDF has been written).
+	if err := fireCallback("document_end"); err != nil {
+		return fmt.Errorf("document_end callback: %w", err)
+	}
+
+	// Read _aux back from Lua (user may have modified it) and update system keys.
+	curAux := readAuxGlobal(l)
+	curAux["_pages"] = len(fe.Doc.Pages)
+	headings := make([]any, len(cb.Headings))
+	for i, h := range cb.Headings {
+		headings[i] = map[string]any{"level": h.Level, "text": h.Text, "page": h.Page}
+	}
+	curAux["_headings"] = headings
 	if changed, err := writeAuxFile(auxPath, oldAux, curAux); err != nil {
 		return fmt.Errorf("writing aux file: %w", err)
 	} else if changed {
-		slog.Info("Aux data changed — rerun to update cross-references", "pages", curAux.Pages)
-	}
-
-	if err := fe.Finish(); err != nil {
-		return fmt.Errorf("finishing document: %w", err)
+		slog.Info("Aux data changed — rerun to update cross-references")
 	}
 
 	slog.Info("PDF written", "file", outputFilename, "pages", len(fe.Doc.Pages))

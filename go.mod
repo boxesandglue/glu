@@ -10,7 +10,7 @@ require (
 	github.com/boxesandglue/svgreader v0.0.1
 	github.com/boxesandglue/textshape v0.0.7
 	github.com/speedata/cxpath v0.0.5
-	github.com/speedata/go-lua v0.1.2
+	github.com/speedata/go-lua v0.1.3
 	github.com/speedata/optionparser v1.1.1
 	github.com/yuin/goldmark v1.7.16
 	gopkg.in/yaml.v3 v3.0.1

@@ -15,6 +15,8 @@ import (
 	luabackend "github.com/speedata/glu/lua/backend"
 	luacxpath "github.com/speedata/glu/lua/cxpath"
 	luafrontend "github.com/speedata/glu/lua/frontend"
+	luajson "github.com/speedata/glu/lua/json"
+	lualog "github.com/speedata/glu/lua/log"
 	luapdf "github.com/speedata/glu/lua/pdf"
 	luatextshape "github.com/speedata/glu/lua/textshape"
 	"github.com/speedata/glu/markdown"
@@ -117,7 +119,7 @@ func dothings() error {
 	pdf.Logger = logger
 
 	if clean {
-		auxFile := mainfile[0:len(mainfile)-len(ext)] + ".aux"
+		auxFile := mainfile[0:len(mainfile)-len(ext)] + "-aux.json"
 		if err := os.Remove(auxFile); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("removing %s: %w", auxFile, err)
 		}
@@ -135,6 +137,8 @@ func dothings() error {
 	luabackend.Open(l)
 	luacxpath.Open(l)
 	luatextshape.Open(l)
+	luajson.Open(l)
+	lualog.Open(l)
 
 	switch ext {
 	case ".lua":
