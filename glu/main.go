@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"time"
 
 	pdf "github.com/boxesandglue/baseline-pdf"
@@ -20,6 +21,8 @@ import (
 	luapdf "github.com/speedata/glu/lua/pdf"
 	luatextshape "github.com/speedata/glu/lua/textshape"
 	"github.com/speedata/glu/markdown"
+
+	"github.com/boxesandglue/hobby"
 )
 
 // Version is the version of the program.
@@ -38,6 +41,7 @@ func dothings() error {
 	var debugMarkdown bool
 	var debugHTML bool
 	var clean bool
+	var cpuprofile string
 	op := optionparser.NewOptionParser()
 	op.Banner = "glu - typesetting with boxes and glue"
 	op.Coda = "\nUsage: glu [options] <filename.lua|filename.md|filename.html>"
@@ -49,6 +53,7 @@ func dothings() error {
 	op.On("--markdown", "Print expanded Markdown to stdout (debug)", &debugMarkdown)
 	op.On("--html", "Print generated HTML to stdout (debug, Markdown mode)", &debugHTML)
 	op.On("--clean", "Remove auxiliary files before processing", &clean)
+	op.On("--cpuprofile FILE", "Write CPU profile to file", &cpuprofile)
 	op.Command("help", "Show the help message")
 	op.Command("version", "Print version and exit")
 	if err := op.Parse(); err != nil {
@@ -58,6 +63,18 @@ func dothings() error {
 	if showVersion {
 		fmt.Printf("glu version %s\n", Version)
 		return nil
+	}
+
+	if cpuprofile != "" {
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			return fmt.Errorf("creating CPU profile: %w", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			return fmt.Errorf("starting CPU profile: %w", err)
+		}
+		defer pprof.StopCPUProfile()
 	}
 
 	// Configure logger based on loglevel
@@ -76,17 +93,19 @@ func dothings() error {
 	}
 
 	var mainfile string
-	for _, arg := range op.Extra {
-		switch arg {
-		case "version":
+	var scriptArgs []string
+	for i, a := range op.Extra {
+		if a == "version" {
 			fmt.Printf("glu version %s\n", Version)
 			return nil
-		case "help":
+		}
+		if a == "help" {
 			op.Help()
 			return nil
-		default:
-			mainfile = arg
 		}
+		mainfile = a
+		scriptArgs = op.Extra[i+1:]
+		break
 	}
 
 	if mainfile == "" {
@@ -139,6 +158,22 @@ func dothings() error {
 	luatextshape.Open(l)
 	luajson.Open(l)
 	lualog.Open(l)
+	hobby.Open(l)
+
+	// Set up arg table (PUC-Rio Lua compatible):
+	//   arg[-1] = interpreter name
+	//   arg[0]  = script name
+	//   arg[1], arg[2], ... = script arguments
+	l.NewTable()
+	l.PushString(os.Args[0])
+	l.RawSetInt(-2, -1)
+	l.PushString(mainfile)
+	l.RawSetInt(-2, 0)
+	for i, a := range scriptArgs {
+		l.PushString(a)
+		l.RawSetInt(-2, i+1)
+	}
+	l.SetGlobal("arg")
 
 	switch ext {
 	case ".lua":

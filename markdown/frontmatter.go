@@ -8,10 +8,13 @@ import (
 
 // Frontmatter holds metadata extracted from the YAML front matter block.
 type Frontmatter struct {
-	Title     string `yaml:"title"`
-	Author    string `yaml:"author"`
-	CSS       string `yaml:"css"`
-	Papersize string `yaml:"papersize"`
+	Title     string         `yaml:"title"`
+	Author    string         `yaml:"author"`
+	CSS       string         `yaml:"css"`
+	Papersize string         `yaml:"papersize"`
+	Format    string         `yaml:"format"`
+	Lang      string         `yaml:"lang"`
+	Extra     map[string]any `yaml:"-"` // all key-value pairs (including the known ones)
 }
 
 // extractFrontmatter separates YAML front matter from the Markdown body.
@@ -47,5 +50,12 @@ func extractFrontmatter(source string) (Frontmatter, string) {
 	}
 
 	_ = yaml.Unmarshal([]byte(yamlBlock), &fm)
+	// Also parse into a generic map so all keys are available.
+	var extra map[string]any
+	_ = yaml.Unmarshal([]byte(yamlBlock), &extra)
+	if extra == nil {
+		extra = make(map[string]any)
+	}
+	fm.Extra = extra
 	return fm, body
 }

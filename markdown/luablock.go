@@ -11,6 +11,51 @@ import (
 // luaBlockPattern matches ```{lua} ... ``` fenced code blocks.
 var luaBlockPattern = regexp.MustCompile("(?s)```\\{lua\\}\n(.*?)```")
 
+// protectExtendedFences replaces fenced code blocks opened with 4+ backticks
+// with placeholders. Go's regexp (RE2) has no backreferences, so we scan manually.
+func protectExtendedFences(source string, protected *[]string) string {
+	var out strings.Builder
+	rest := source
+	for {
+		// Find a line starting with 4+ backticks.
+		idx := strings.Index(rest, "````")
+		if idx < 0 {
+			break
+		}
+		// Must be at start of line (or start of string).
+		if idx > 0 && rest[idx-1] != '\n' {
+			out.WriteString(rest[:idx+4])
+			rest = rest[idx+4:]
+			continue
+		}
+		// Count the backticks.
+		fence := idx
+		end := idx
+		for end < len(rest) && rest[end] == '`' {
+			end++
+		}
+		fenceStr := rest[idx:end]
+		// Find closing fence (same number of backticks, on its own line).
+		closePattern := "\n" + fenceStr
+		closeIdx := strings.Index(rest[end:], closePattern)
+		if closeIdx < 0 {
+			out.WriteString(rest[:end])
+			rest = rest[end:]
+			continue
+		}
+		// Include everything up to and including the closing fence.
+		blockEnd := end + closeIdx + len(closePattern)
+		block := rest[fence:blockEnd]
+		placeholder := fmt.Sprintf("\x00PROTECTED_%d\x00", len(*protected))
+		*protected = append(*protected, block)
+		out.WriteString(rest[:fence])
+		out.WriteString(placeholder)
+		rest = rest[blockEnd:]
+	}
+	out.WriteString(rest)
+	return out.String()
+}
+
 // inlineExprPattern matches {= expr =} inline expressions.
 var inlineExprPattern = regexp.MustCompile(`\{=\s*(.*?)\s*=\}`)
 
@@ -19,9 +64,22 @@ var inlineExprPattern = regexp.MustCompile(`\{=\s*(.*?)\s*=\}`)
 // returns a string, it is inserted into the output. Lua blocks can use
 // startrecording() and stoprecording() to capture and process the text
 // between two blocks.
+//
+// Blocks marked with ```{!lua} are not executed — the {!lua} tag is
+// converted to plain "lua" so goldmark renders them with syntax highlighting.
 func extractAndRunLuaBlocks(l *lua.State, source string) (string, error) {
+	// Protect fenced code blocks with 4+ backticks from Lua extraction.
+	// These may contain ```{lua} examples that should not be executed.
+	var protected []string
+	source = protectExtendedFences(source, &protected)
+
+	// Convert display-only blocks before matching executable ones.
+	source = strings.ReplaceAll(source, "```{!lua}", "```lua")
 	matches := luaBlockPattern.FindAllStringSubmatchIndex(source, -1)
 	if len(matches) == 0 {
+		for i, orig := range protected {
+			source = strings.Replace(source, fmt.Sprintf("\x00PROTECTED_%d\x00", i), orig, 1)
+		}
 		return source, nil
 	}
 
@@ -81,7 +139,11 @@ func extractAndRunLuaBlocks(l *lua.State, source string) (string, error) {
 		result.WriteString(remaining)
 	}
 
-	return result.String(), nil
+	out := result.String()
+	for i, orig := range protected {
+		out = strings.Replace(out, fmt.Sprintf("\x00PROTECTED_%d\x00", i), orig, 1)
+	}
+	return out, nil
 }
 
 // expandInlineExpressions replaces {= expr =} with the Lua evaluation result.

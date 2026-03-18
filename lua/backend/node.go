@@ -23,17 +23,19 @@ const (
 )
 
 // Node wrapper types
-type NodeGlyph struct{ Value *node.Glyph }
-type NodeGlue struct{ Value *node.Glue }
-type NodeKern struct{ Value *node.Kern }
-type NodeDisc struct{ Value *node.Disc }
-type NodePenalty struct{ Value *node.Penalty }
-type NodeRule struct{ Value *node.Rule }
-type NodeHList struct{ Value *node.HList }
-type NodeVList struct{ Value *node.VList }
-type NodeImage struct{ Value *node.Image }
-type NodeLang struct{ Value *node.Lang }
-type NodeStartStop struct{ Value *node.StartStop }
+type (
+	NodeGlyph     struct{ Value *node.Glyph }
+	NodeGlue      struct{ Value *node.Glue }
+	NodeKern      struct{ Value *node.Kern }
+	NodeDisc      struct{ Value *node.Disc }
+	NodePenalty   struct{ Value *node.Penalty }
+	NodeRule      struct{ Value *node.Rule }
+	NodeHList     struct{ Value *node.HList }
+	NodeVList     struct{ Value *node.VList }
+	NodeImage     struct{ Value *node.Image }
+	NodeLang      struct{ Value *node.Lang }
+	NodeStartStop struct{ Value *node.StartStop }
+)
 
 // pushNode pushes any node to the Lua stack with the correct metatable
 func pushNode(l *lua.State, n node.Node) {
@@ -438,8 +440,7 @@ func kernIndex(l *lua.State) int {
 	k := ud.(*NodeKern).Value
 	key := lua.CheckString(l, 2)
 
-	switch key {
-	case "kern":
+	if key == "kern" {
 		l.PushInteger(int(k.Kern))
 		return 1
 	}

@@ -7,20 +7,28 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 
+	pdf "github.com/boxesandglue/baseline-pdf"
+	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/frontend"
 	"github.com/boxesandglue/csshtml"
 	"github.com/boxesandglue/htmlbag"
 	"github.com/speedata/go-lua"
 	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
 	luacommon "github.com/speedata/glu/lua/common"
 	luafrontend "github.com/speedata/glu/lua/frontend"
 )
+
+// preTrailingNL matches a trailing newline (possibly inside a chroma
+// whitespace span) just before the closing </code></pre> sequence.
+var preTrailingNL = regexp.MustCompile(`(?:<span[^>]*>)?\n((?:</span>)*</code></pre>)`)
 
 // readAuxFile reads a previously written aux file. If the file does not exist
 // it returns an empty map and no error.
@@ -122,6 +130,10 @@ func ProcessFile(l *lua.State, filename string, opts Options) error {
 	fm, body := extractFrontmatter(source)
 	slog.Debug("Frontmatter", "title", fm.Title, "author", fm.Author, "papersize", fm.Papersize, "css", fm.CSS)
 
+	// Make the entire frontmatter available as _frontmatter Lua global.
+	luacommon.PushAny(l, any(fm.Extra))
+	l.SetGlobal("_frontmatter")
+
 	// Step 3: Load companion Lua file (e.g. example.lua for example.md)
 	// Loaded before aux so that lifecycle callbacks can be registered.
 	luaFile := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".lua"
@@ -170,11 +182,18 @@ func ProcessFile(l *lua.State, filename string, opts Options) error {
 	}
 
 	// Step 5: Markdown → HTML
+	highlightStyle := "github"
+	if s, ok := fm.Extra["highlight-style"].(string); ok {
+		highlightStyle = s
+	}
 	gm := goldmark.New(
 		goldmark.WithExtensions(
 			extension.Table,
 			extension.Strikethrough,
 			extension.Linkify,
+			highlighting.NewHighlighting(
+				highlighting.WithStyle(highlightStyle),
+			),
 		),
 		goldmark.WithRendererOptions(
 			goldmarkhtml.WithUnsafe(),
@@ -184,7 +203,9 @@ func ProcessFile(l *lua.State, filename string, opts Options) error {
 	if err := gm.Convert([]byte(body), &htmlBuf); err != nil {
 		return fmt.Errorf("goldmark convert: %w", err)
 	}
-	htmlStr := htmlBuf.String()
+	// Strip trailing newlines inside <pre><code> blocks to avoid an extra
+	// blank line at the bottom (chroma and goldmark both add one).
+	htmlStr := preTrailingNL.ReplaceAllString(htmlBuf.String(), "$1")
 	slog.Debug("HTML generated", "length", len(htmlStr))
 
 	// Debug mode: print generated HTML and exit
@@ -281,21 +302,25 @@ func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
 		return fmt.Errorf("HTML to text: %w", err)
 	}
 
-	// Initialize the page (now @page rules from <style> are available)
-	pd, err := cb.PageSize()
-	if err != nil {
-		return fmt.Errorf("getting page size: %w", err)
-	}
-
-	// Build vertical list
-	vl, err := cb.CreateVlist(te, pd.ContentWidth)
-	if err != nil {
-		return fmt.Errorf("creating vlist: %w", err)
-	}
-
-	// Distribute content across pages
-	if err := cb.OutputPages(vl); err != nil {
+	// Distribute content across pages. OutputPagesFromText splits the
+	// Text tree at forced page breaks and formats each group with the
+	// content width of its target page (respecting @page margins).
+	if err := cb.OutputPagesFromText(te); err != nil {
 		return fmt.Errorf("outputting pages: %w", err)
+	}
+
+	// PDF/UA: create bookmarks from headings
+	if len(cb.Headings) > 0 {
+		for _, h := range cb.Headings {
+			if h.Page > 0 && h.Page <= len(fe.Doc.Pages) {
+				pg := fe.Doc.Pages[h.Page-1]
+				dest := fmt.Sprintf("[%s /Fit]", pg.Objectnumber.Ref())
+				fe.Doc.PDFWriter.Outlines = append(fe.Doc.PDFWriter.Outlines, &pdf.Outline{
+					Title: h.Text,
+					Dest:  dest,
+				})
+			}
+		}
 	}
 
 	if err := fe.Finish(); err != nil {
@@ -344,6 +369,12 @@ func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontma
 	}
 	if fm.Author != "" {
 		fe.Doc.Author = fm.Author
+	}
+	if fm.Format == "PDF/UA" {
+		fe.Doc.Format = document.FormatPDFUA
+	}
+	if fm.Lang != "" {
+		fe.Doc.DefaultLanguageTag = fm.Lang
 	}
 
 	cssParser := csshtml.NewCSSParserWithDefaults()
@@ -396,26 +427,31 @@ func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontma
 		return fmt.Errorf("initializing page: %w", err)
 	}
 
-	pd, err := cb.PageSize()
-	if err != nil {
-		return fmt.Errorf("getting page size: %w", err)
-	}
-
 	// Convert HTML to text elements
 	te, err := cb.HTMLToText(htmlStr)
 	if err != nil {
 		return fmt.Errorf("HTML to text: %w", err)
 	}
 
-	// Build vertical list
-	vl, err := cb.CreateVlist(te, pd.ContentWidth)
-	if err != nil {
-		return fmt.Errorf("creating vlist: %w", err)
+	// Distribute content across pages. OutputPagesFromText splits the
+	// Text tree at forced page breaks and formats each group with the
+	// content width of its target page (respecting @page margins).
+	if err := cb.OutputPagesFromText(te); err != nil {
+		return fmt.Errorf("outputting pages: %w", err)
 	}
 
-	// Distribute content across pages (with automatic page breaks)
-	if err := cb.OutputPages(vl); err != nil {
-		return fmt.Errorf("outputting pages: %w", err)
+	// PDF/UA: create bookmarks from headings
+	if len(cb.Headings) > 0 {
+		for _, h := range cb.Headings {
+			if h.Page > 0 && h.Page <= len(fe.Doc.Pages) {
+				pg := fe.Doc.Pages[h.Page-1]
+				dest := fmt.Sprintf("[%s /Fit]", pg.Objectnumber.Ref())
+				fe.Doc.PDFWriter.Outlines = append(fe.Doc.PDFWriter.Outlines, &pdf.Outline{
+					Title: h.Text,
+					Dest:  dest,
+				})
+			}
+		}
 	}
 
 	if err := fe.Finish(); err != nil {

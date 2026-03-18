@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/backend/node"
 	"github.com/speedata/go-lua"
 )
@@ -22,6 +23,28 @@ func checkVList(l *lua.State, index int) *VList {
 	return nil
 }
 
+// vlistSetTag tags a VList with a structure element: vl:set_tag(se)
+func vlistSetTag(l *lua.State) int {
+	vl := checkVList(l, 1)
+	se := checkStructureElement(l, 2)
+	if vl.Value.Attributes == nil {
+		vl.Value.Attributes = node.H{}
+	}
+	vl.Value.Attributes["tag"] = se.Value
+	return 0
+}
+
+// vlistSetArtifact marks a VList as artifact: vl:set_artifact([type])
+func vlistSetArtifact(l *lua.State) int {
+	vl := checkVList(l, 1)
+	artType := lua.OptString(l, 2, "")
+	if vl.Value.Attributes == nil {
+		vl.Value.Attributes = node.H{}
+	}
+	vl.Value.Attributes["artifact"] = document.ArtifactType(artType)
+	return 0
+}
+
 // vlistIndex handles attribute access (__index metamethod)
 func vlistIndex(l *lua.State) int {
 	vl := checkVList(l, 1)
@@ -36,6 +59,12 @@ func vlistIndex(l *lua.State) int {
 		return 1
 	case "depth":
 		pushScaledPoint(l, vl.Value.Depth)
+		return 1
+	case "set_tag":
+		l.PushGoFunction(vlistSetTag)
+		return 1
+	case "set_artifact":
+		l.PushGoFunction(vlistSetArtifact)
 		return 1
 	}
 

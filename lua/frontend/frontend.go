@@ -28,6 +28,7 @@ func openFrontend(l *lua.State) int {
 	registerSVGNodeMetaTable(l)
 	registerPageInfoMetaTable(l)
 	registerElementInfoMetaTable(l)
+	registerStructureElementMetaTable(l)
 
 	// Create the frontend module table
 	lua.NewLibrary(l, []lua.RegistryFunction{

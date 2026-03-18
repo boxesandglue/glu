@@ -7,6 +7,7 @@ import (
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/backend/node"
 	"github.com/boxesandglue/boxesandglue/frontend"
+	"github.com/boxesandglue/htmlbag"
 	"github.com/speedata/go-lua"
 )
 
@@ -345,6 +346,27 @@ func documentAttachFile(l *lua.State) int {
 	return 0
 }
 
+// documentNewStructureElement creates a new structure element: doc:new_structure_element(role)
+func documentNewStructureElement(l *lua.State) int {
+	d := checkDocument(l, 1)
+	role := lua.CheckString(l, 2)
+	se := d.Value.NewStructureElement(role)
+	l.PushUserData(&StructureElement{Value: se})
+	lua.SetMetaTableNamed(l, structureElementMetaTable)
+	return 1
+}
+
+// documentLoadIncludedFonts loads the built-in font families (sans, serif,
+// monospace) from htmlbag's embedded font data: doc:load_included_fonts()
+func documentLoadIncludedFonts(l *lua.State) int {
+	d := checkDocument(l, 1)
+	if err := htmlbag.LoadIncludedFonts(d.Value); err != nil {
+		lua.Errorf(l, "failed to load included fonts: %s", err.Error())
+		return 0
+	}
+	return 0
+}
+
 // documentIndex handles attribute access (__index metamethod)
 func documentIndex(l *lua.State) int {
 	d := checkDocument(l, 1)
@@ -435,6 +457,21 @@ func documentIndex(l *lua.State) int {
 	case "create_svg_node":
 		l.PushGoFunction(documentCreateSVGNode)
 		return 1
+	case "load_included_fonts":
+		l.PushGoFunction(documentLoadIncludedFonts)
+		return 1
+	case "new_structure_element":
+		l.PushGoFunction(documentNewStructureElement)
+		return 1
+	case "root_structure_element":
+		se := d.Value.Doc.RootStructureElement
+		if se == nil {
+			l.PushNil()
+		} else {
+			l.PushUserData(&StructureElement{Value: se})
+			lua.SetMetaTableNamed(l, structureElementMetaTable)
+		}
+		return 1
 	}
 
 	return 0
@@ -477,6 +514,11 @@ func documentNewIndex(l *lua.State) int {
 	case "language":
 		lang := checkLanguage(l, 3)
 		d.Value.Doc.DefaultLanguage = lang.Value
+	case "language_tag":
+		d.Value.Doc.DefaultLanguageTag = lua.CheckString(l, 3)
+	case "root_structure_element":
+		se := checkStructureElement(l, 3)
+		d.Value.SetRootStructureElement(se.Value)
 	default:
 		lua.Errorf(l, "cannot set attribute %s on Document", key)
 	}

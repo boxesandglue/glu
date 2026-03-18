@@ -47,6 +47,10 @@ func pageOutputAt(l *lua.State) int {
 		if v, ok := ud.(*SVGNode); ok {
 			vl = node.Vpack(v.Value)
 		}
+	} else if ud := lua.TestUserData(l, 4, imageNodeMetaTable); ud != nil {
+		if v, ok := ud.(*ImageNode); ok {
+			vl = node.Vpack(v.Value)
+		}
 	}
 
 	if vl == nil {
