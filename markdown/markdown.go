@@ -22,8 +22,8 @@ import (
 	"github.com/yuin/goldmark/extension"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
-	luacommon "github.com/speedata/glu/lua/common"
-	luafrontend "github.com/speedata/glu/lua/frontend"
+	luacommon "github.com/boxesandglue/glu/lua/common"
+	luafrontend "github.com/boxesandglue/glu/lua/frontend"
 )
 
 // preTrailingNL matches a trailing newline (possibly inside a chroma

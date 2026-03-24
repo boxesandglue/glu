@@ -13,14 +13,14 @@ import (
 	"github.com/speedata/go-lua"
 	"github.com/speedata/optionparser"
 
-	luabackend "github.com/speedata/glu/lua/backend"
-	luacxpath "github.com/speedata/glu/lua/cxpath"
-	luafrontend "github.com/speedata/glu/lua/frontend"
-	luajson "github.com/speedata/glu/lua/json"
-	lualog "github.com/speedata/glu/lua/log"
-	luapdf "github.com/speedata/glu/lua/pdf"
-	luatextshape "github.com/speedata/glu/lua/textshape"
-	"github.com/speedata/glu/markdown"
+	luabackend "github.com/boxesandglue/glu/lua/backend"
+	luacxpath "github.com/boxesandglue/glu/lua/cxpath"
+	luafrontend "github.com/boxesandglue/glu/lua/frontend"
+	luajson "github.com/boxesandglue/glu/lua/json"
+	lualog "github.com/boxesandglue/glu/lua/log"
+	luapdf "github.com/boxesandglue/glu/lua/pdf"
+	luatextshape "github.com/boxesandglue/glu/lua/textshape"
+	"github.com/boxesandglue/glu/markdown"
 
 	"github.com/boxesandglue/hobby"
 )

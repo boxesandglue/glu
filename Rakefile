@@ -15,9 +15,9 @@ task :default do
     puts
 end
 
-desc "Build the 'glu' binary"
+desc "Build and install the 'glu' binary"
 task :build do
-    sh "go build -ldflags '-s -w -X main.Version=#{@glu_version}' -o bin/glu github.com/speedata/glu/glu"
+    sh "go install -ldflags '-s -w -X main.Version=#{@glu_version}' github.com/boxesandglue/glu/glu"
 end
 
 desc "Show version information"
@@ -25,7 +25,3 @@ task :showversion do
     puts "glu version #{@glu_version}"
 end
 
-desc "Clean build artifacts"
-task :clean do
-    FileUtils.rm_rf("bin")
-end

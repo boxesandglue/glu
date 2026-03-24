@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/speedata/glu/lua/common"
+	"github.com/boxesandglue/glu/lua/common"
 	"github.com/speedata/go-lua"
 )
 

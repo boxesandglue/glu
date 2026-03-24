@@ -346,6 +346,76 @@ func documentAttachFile(l *lua.State) int {
 	return 0
 }
 
+// documentAddXMPExtension registers an XMP extension schema:
+// doc:add_xmp_extension({ schema = "...", namespace_uri = "...", prefix = "...",
+//
+//	properties = { {name="...", value_type="Text", category="external", description="..."}, ... },
+//	values = { Key = "value", ... } })
+func documentAddXMPExtension(l *lua.State) int {
+	d := checkDocument(l, 1)
+	lua.CheckType(l, 2, lua.TypeTable)
+
+	l.Field(2, "schema")
+	schema := lua.CheckString(l, -1)
+	l.Pop(1)
+
+	l.Field(2, "namespace_uri")
+	nsURI := lua.CheckString(l, -1)
+	l.Pop(1)
+
+	l.Field(2, "prefix")
+	prefix := lua.CheckString(l, -1)
+	l.Pop(1)
+
+	var props []document.XMPExtensionProperty
+	l.Field(2, "properties")
+	if !l.IsNil(-1) {
+		n := l.RawLength(-1)
+		for i := 1; i <= n; i++ {
+			l.RawGetInt(-1, i)
+			l.Field(-1, "name")
+			pName := lua.CheckString(l, -1)
+			l.Pop(1)
+			l.Field(-1, "value_type")
+			pType := lua.CheckString(l, -1)
+			l.Pop(1)
+			l.Field(-1, "category")
+			pCat := lua.CheckString(l, -1)
+			l.Pop(1)
+			l.Field(-1, "description")
+			pDesc := lua.CheckString(l, -1)
+			l.Pop(1)
+			props = append(props, document.XMPExtensionProperty{
+				Name: pName, ValueType: pType, Category: pCat, Description: pDesc,
+			})
+			l.Pop(1) // pop property table
+		}
+	}
+	l.Pop(1) // pop properties
+
+	values := make(map[string]string)
+	l.Field(2, "values")
+	if !l.IsNil(-1) {
+		l.PushNil()
+		for l.Next(-2) {
+			k := lua.CheckString(l, -2)
+			v := lua.CheckString(l, -1)
+			values[k] = v
+			l.Pop(1) // pop value, keep key
+		}
+	}
+	l.Pop(1) // pop values
+
+	d.Value.Doc.AddXMPExtension(document.XMPExtension{
+		Schema:       schema,
+		NamespaceURI: nsURI,
+		Prefix:       prefix,
+		Properties:   props,
+		Values:       values,
+	})
+	return 0
+}
+
 // documentNewStructureElement creates a new structure element: doc:new_structure_element(role)
 func documentNewStructureElement(l *lua.State) int {
 	d := checkDocument(l, 1)
@@ -405,9 +475,6 @@ func documentIndex(l *lua.State) int {
 			l.PushString("PDF")
 		}
 		return 1
-	case "additional_xml_metadata":
-		l.PushString(d.Value.Doc.AdditionalXMLMetadata)
-		return 1
 	// Methods
 	case "finish":
 		l.PushGoFunction(documentFinish)
@@ -444,6 +511,9 @@ func documentIndex(l *lua.State) int {
 		return 1
 	case "attach_file":
 		l.PushGoFunction(documentAttachFile)
+		return 1
+	case "add_xmp_extension":
+		l.PushGoFunction(documentAddXMPExtension)
 		return 1
 	case "load_imagefile":
 		l.PushGoFunction(documentLoadImagefile)
@@ -509,8 +579,6 @@ func documentNewIndex(l *lua.State) int {
 		default:
 			lua.Errorf(l, "unknown format: %s (use PDF, PDF/A-3b, PDF/X-3, PDF/X-4, PDF/UA)", formatStr)
 		}
-	case "additional_xml_metadata":
-		d.Value.Doc.AdditionalXMLMetadata = lua.CheckString(l, 3)
 	case "language":
 		lang := checkLanguage(l, 3)
 		d.Value.Doc.DefaultLanguage = lang.Value

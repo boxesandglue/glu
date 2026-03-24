@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/speedata/glu/lua/common"
+	"github.com/boxesandglue/glu/lua/common"
 	"github.com/speedata/go-lua"
 )
 

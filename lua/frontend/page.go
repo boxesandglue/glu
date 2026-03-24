@@ -3,8 +3,8 @@ package frontend
 import (
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/backend/node"
+	"github.com/boxesandglue/glu/lua/backend"
 	"github.com/boxesandglue/htmlbag"
-	"github.com/speedata/glu/lua/backend"
 	"github.com/speedata/go-lua"
 )
 

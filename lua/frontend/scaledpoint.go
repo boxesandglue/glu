@@ -2,7 +2,7 @@ package frontend
 
 import (
 	"github.com/boxesandglue/boxesandglue/backend/bag"
-	"github.com/speedata/glu/lua/common"
+	"github.com/boxesandglue/glu/lua/common"
 	"github.com/speedata/go-lua"
 )
 
