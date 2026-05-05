@@ -237,12 +237,27 @@ func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
 		}
 	}
 
+	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
+	baseDir, err := filepath.Abs(filepath.Dir(filename))
+	if err != nil {
+		return fmt.Errorf("resolving path: %w", err)
+	}
+
+	return ProcessHTMLString(l, htmlStr, baseDir, outputFilename, opts)
+}
+
+// ProcessHTMLString takes an HTML payload (already in memory), the directory
+// to resolve relative CSS @import / <link> paths against, and an output PDF
+// filename, and runs the same pipeline as ProcessHTMLFile.
+//
+// Useful for embedders that produce HTML on the fly (e.g. an XSL-FO walker)
+// and want to skip the disk-roundtrip of writing the HTML out and reading
+// it back in.
+func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, opts Options) error {
 	// Fire document_start callback (before aux file is loaded).
 	if err := fireCallback("document_start"); err != nil {
 		return fmt.Errorf("document_start callback: %w", err)
 	}
-
-	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
 
 	// Read aux data from a previous run (for forward references like counter(pages)).
 	auxPath := strings.TrimSuffix(outputFilename, ".pdf") + "-aux.json"
@@ -260,12 +275,8 @@ func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
 	}
 
 	cssParser := csshtml.NewCSSParserWithDefaults()
-	// Set the directory so relative CSS paths (in <link> or @import) resolve correctly.
-	abs, err := filepath.Abs(filepath.Dir(filename))
-	if err != nil {
-		return fmt.Errorf("resolving path: %w", err)
-	}
-	cssParser.PushDir(abs)
+	// Resolve relative CSS paths against baseDir.
+	cssParser.PushDir(baseDir)
 
 	cb, err := htmlbag.New(fe, cssParser)
 	if err != nil {

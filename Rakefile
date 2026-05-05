@@ -15,8 +15,13 @@ task :default do
     puts
 end
 
-desc "Build and install the 'glu' binary"
+desc "Build the 'glu' binary"
 task :build do
+    sh "go build -ldflags '-s -w -X main.Version=#{@glu_version}' -o bin/glu github.com/boxesandglue/glu/glu"
+end
+
+desc "Install 'glu' into $GOBIN"
+task :install do
     sh "go install -ldflags '-s -w -X main.Version=#{@glu_version}' github.com/boxesandglue/glu/glu"
 end
 

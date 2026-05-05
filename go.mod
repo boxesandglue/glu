@@ -3,14 +3,14 @@ module github.com/boxesandglue/glu
 go 1.24.0
 
 require (
-	github.com/boxesandglue/baseline-pdf v1.1.7
-	github.com/boxesandglue/boxesandglue v0.2.10
-	github.com/boxesandglue/csshtml v0.0.7
+	github.com/boxesandglue/baseline-pdf v1.1.9
+	github.com/boxesandglue/boxesandglue v0.2.15
+	github.com/boxesandglue/csshtml v0.0.9
 	github.com/boxesandglue/hobby v0.0.6
-	github.com/boxesandglue/htmlbag v0.0.10
+	github.com/boxesandglue/htmlbag v0.0.14
 	github.com/boxesandglue/svgreader v0.0.2
-	github.com/boxesandglue/textshape v0.0.9
-	github.com/speedata/cxpath v0.0.5
+	github.com/boxesandglue/textshape v0.0.10
+	github.com/speedata/cxpath v0.0.9
 	github.com/speedata/go-lua v0.1.6
 	github.com/speedata/optionparser v1.1.1
 	github.com/yuin/goldmark v1.7.16
@@ -26,9 +26,11 @@ require (
 	github.com/boxesandglue/mpgo v0.1.6 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/speedata/css/scanner v0.0.0-20250825095519-68d469dc62c4 // indirect
-	github.com/speedata/goxml v1.0.5 // indirect
-	github.com/speedata/goxpath v1.0.4 // indirect
+	github.com/speedata/barcode v1.1.1 // indirect
+	github.com/speedata/css v1.0.5 // indirect
+	github.com/speedata/goxml v1.0.9 // indirect
+	github.com/speedata/goxpath v1.0.12 // indirect
 	github.com/speedata/hyphenation v1.0.2 // indirect
 	golang.org/x/net v0.48.0 // indirect
+	golang.org/x/text v0.32.0 // indirect
 )

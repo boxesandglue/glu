@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/pprof"
+	"strings"
 	"time"
 
 	pdf "github.com/boxesandglue/baseline-pdf"
@@ -16,6 +17,7 @@ import (
 	luabackend "github.com/boxesandglue/glu/lua/backend"
 	luacxpath "github.com/boxesandglue/glu/lua/cxpath"
 	luafrontend "github.com/boxesandglue/glu/lua/frontend"
+	luahtmlbag "github.com/boxesandglue/glu/lua/htmlbag"
 	luajson "github.com/boxesandglue/glu/lua/json"
 	lualog "github.com/boxesandglue/glu/lua/log"
 	luapdf "github.com/boxesandglue/glu/lua/pdf"
@@ -65,6 +67,37 @@ func dothings() error {
 		return nil
 	}
 
+	// Multi-call binary: when invoked under any name other than "glu" —
+	// typically via a symlink — look for a Lua script of that name and
+	// run it with all positional arguments forwarded. Search order:
+	//   1. current working directory
+	//   2. directory of the symlink (os.Args[0])
+	// Flags that glu owns (--loglevel, --css, etc.) are still handled
+	// up front; everything else goes to the script.
+	binBase := strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0]))
+	if binBase != "glu" {
+		scriptName := binBase + ".lua"
+		scriptPath := ""
+		if _, err := os.Stat(scriptName); err == nil {
+			if abs, absErr := filepath.Abs(scriptName); absErr == nil {
+				scriptPath = abs
+			}
+		}
+		if scriptPath == "" {
+			symDir := filepath.Dir(os.Args[0])
+			if symDir != "" {
+				candidate := filepath.Join(symDir, scriptName)
+				if _, err := os.Stat(candidate); err == nil {
+					scriptPath = candidate
+				}
+			}
+		}
+		if scriptPath == "" {
+			return fmt.Errorf("multi-call %q: no %s found in current directory or next to %s", binBase, scriptName, os.Args[0])
+		}
+		op.Extra = append([]string{scriptPath}, op.Extra...)
+	}
+
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
 		if err != nil {
@@ -92,25 +125,18 @@ func dothings() error {
 		level = slog.LevelInfo
 	}
 
-	var mainfile string
-	var scriptArgs []string
-	for i, a := range op.Extra {
-		if a == "version" {
-			fmt.Printf("glu version %s\n", Version)
-			return nil
-		}
-		if a == "help" {
-			op.Help()
-			return nil
-		}
-		mainfile = a
-		scriptArgs = op.Extra[i+1:]
-		break
-	}
-
-	if mainfile == "" {
+	if len(op.Extra) == 0 {
 		return fmt.Errorf("usage: %s <filename.lua|filename.md>", os.Args[0])
 	}
+	switch op.Extra[0] {
+	case "version":
+		fmt.Printf("glu version %s\n", Version)
+		return nil
+	case "help":
+		op.Help()
+		return nil
+	}
+	mainfile, scriptArgs := op.Extra[0], op.Extra[1:]
 	// logfile is main file with .log extension
 	ext := filepath.Ext(mainfile)
 	logfilename := mainfile[0:len(mainfile)-len(ext)] + ".log"
@@ -155,6 +181,7 @@ func dothings() error {
 	luafrontend.Open(l)
 	luabackend.Open(l)
 	luacxpath.Open(l)
+	luahtmlbag.Open(l)
 	luatextshape.Open(l)
 	luajson.Open(l)
 	lualog.Open(l)
