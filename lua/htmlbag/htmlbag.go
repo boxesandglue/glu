@@ -11,26 +11,58 @@
 package htmlbag
 
 import (
+	"github.com/boxesandglue/glu/lua/common"
 	"github.com/boxesandglue/glu/markdown"
 	"github.com/speedata/go-lua"
 )
 
 // luaRender is the Lua-callable entry point.
-//   render(html_string, output_pdf [, base_dir])
 //
-// base_dir defaults to "." and is used to resolve relative CSS paths
-// (e.g. <link rel="stylesheet" href="…">) inside the HTML payload.
+//	render(html_string, output_pdf [, base_dir_or_options])
+//
+// The third argument is either:
+//   - a string: treated as base_dir for resolving relative CSS paths
+//     (e.g. <link rel="stylesheet" href="…">) inside the HTML payload;
+//   - a table: an options dict with the following recognised keys:
+//
+//	    base_dir = "."          -- relative CSS path root
+//	    format   = "PDF/UA"     -- PDF conformance level
+//	    lang     = "en-US"      -- BCP47, written to PDF /Lang
+//	    title    = "Showcase"   -- PDF /Title (also XMP dc:title)
+//
+// Unknown keys are silently ignored. base_dir defaults to ".".
 func luaRender(l *lua.State) int {
 	htmlStr := lua.CheckString(l, 1)
 	outputPDF := lua.CheckString(l, 2)
 	baseDir := "."
+	opts := markdown.Options{}
 	if l.Top() >= 3 {
-		if s, ok := l.ToString(3); ok {
+		switch {
+		case l.IsString(3):
+			s, _ := l.ToString(3)
 			baseDir = s
+		case l.IsTable(3):
+			if m, ok := common.LuaTableToGo(l, 3).(map[string]any); ok {
+				if v, ok := m["base_dir"].(string); ok && v != "" {
+					baseDir = v
+				}
+				if v, ok := m["format"].(string); ok {
+					opts.Format = v
+				}
+				if v, ok := m["lang"].(string); ok {
+					opts.Lang = v
+				}
+				if v, ok := m["title"].(string); ok {
+					opts.Title = v
+				}
+			}
 		}
 	}
-	if err := markdown.ProcessHTMLString(l, htmlStr, baseDir, outputPDF, markdown.Options{}); err != nil {
-		lua.Errorf(l, "glu.htmlbag.render: %v", err.Error())
+	if err := markdown.ProcessHTMLString(l, htmlStr, baseDir, outputPDF, opts); err != nil {
+		// lua.Errorf forwards to lua_pushfstring which does NOT support %v;
+		// only %s, %d, %f, %p, %c, %U are honoured. Stick to %s with the
+		// pre-stringified message.
+		lua.Errorf(l, "glu.htmlbag.render: %s", err.Error())
 	}
 	return 0
 }

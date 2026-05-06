@@ -103,6 +103,17 @@ type Options struct {
 	CSSFile       string // additional CSS file to load
 	DebugMarkdown bool   // print expanded Markdown to stdout instead of generating PDF
 	DebugHTML     bool   // print generated HTML to stdout instead of generating PDF
+	// Format selects a PDF conformance level. "PDF/UA" enables the
+	// accessibility tagging pipeline (StructTreeRoot, MarkInfo, role-mapped
+	// element tree, XMP pdfuaid:part 1). Empty means a plain PDF.
+	Format string
+	// Lang is the BCP47 language tag written to the PDF catalog (/Lang) and
+	// used as the document-wide hyphenation default. Required for PDF/UA.
+	Lang string
+	// Title becomes the document /Title (catalog + XMP dc:title). PDF/UA
+	// also auto-enables /DisplayDocTitle so PDF readers show the title in
+	// the window chrome instead of the filename.
+	Title string
 }
 
 // ProcessFile reads a Markdown file and produces a PDF.
@@ -272,6 +283,22 @@ func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, op
 	fe, err := frontend.New(outputFilename)
 	if err != nil {
 		return fmt.Errorf("creating document: %w", err)
+	}
+
+	// Apply caller-supplied document metadata. PDF/UA enables the
+	// accessibility-tagging pipeline; htmlbag picks it up via
+	// fe.Doc.Format == FormatPDFUA at cssbuilder.go:144 and emits
+	// StructTreeRoot, MarkInfo, /DisplayDocTitle, /Lang, and the
+	// per-element role mapping automatically. /Lang and /Title both
+	// also surface in plain PDF output and the XMP metadata sidecar.
+	if opts.Title != "" {
+		fe.Doc.Title = opts.Title
+	}
+	if opts.Lang != "" {
+		fe.Doc.DefaultLanguageTag = opts.Lang
+	}
+	if opts.Format == "PDF/UA" {
+		fe.Doc.Format = document.FormatPDFUA
 	}
 
 	cssParser := csshtml.NewCSSParserWithDefaults()
