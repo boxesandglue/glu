@@ -20,6 +20,7 @@ import (
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
 	luacommon "github.com/boxesandglue/glu/lua/common"
@@ -206,6 +207,14 @@ func ProcessFile(l *lua.State, filename string, opts Options) error {
 				highlighting.WithStyle(highlightStyle),
 			),
 		),
+		// WithAttribute lets a {.class #id key=value} suffix on
+		// headings and block elements turn into HTML attributes —
+		// e.g. "# Title {.right}" → <h1 class="right">. Combined
+		// with the .left / .right / .center / .justify utility
+		// classes shipped in defaultCSS this is how the Markdown
+		// frontend exposes paragraph alignment, which CommonMark
+		// itself does not have a syntax for.
+		goldmark.WithParserOptions(parser.WithAttribute()),
 		goldmark.WithRendererOptions(
 			goldmarkhtml.WithUnsafe(),
 		),
@@ -296,6 +305,12 @@ func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, op
 	}
 	if opts.Lang != "" {
 		fe.Doc.DefaultLanguageTag = opts.Lang
+		// Load the hyphenation pattern set for this BCP47 tag. Tags
+		// without a TeX pattern (Arabic/Hebrew/CJK/unknown) resolve to
+		// a no-op hyphenator — safe to call unconditionally.
+		if l, err := frontend.GetLanguage(opts.Lang); err == nil {
+			fe.Doc.DefaultLanguage = l
+		}
 	}
 	if opts.Format == "PDF/UA" {
 		fe.Doc.Format = document.FormatPDFUA
@@ -413,6 +428,11 @@ func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontma
 	}
 	if fm.Lang != "" {
 		fe.Doc.DefaultLanguageTag = fm.Lang
+		// Same pattern as opts.Lang above: load the hyphenation
+		// pattern set so Hyphenate has something to work with.
+		if l, err := frontend.GetLanguage(fm.Lang); err == nil {
+			fe.Doc.DefaultLanguage = l
+		}
 	}
 
 	cssParser := csshtml.NewCSSParserWithDefaults()
