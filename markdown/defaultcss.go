@@ -56,6 +56,10 @@ h6 {
 	font-style: italic;
 }
 
+h1, h2, h3, h4, h5, h6 {
+	break-after: avoid;
+}
+
 p {
 	margin-top: 6pt;
 	margin-bottom: 6pt;
