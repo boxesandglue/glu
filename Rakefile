@@ -30,3 +30,15 @@ task :showversion do
     puts "glu version #{@glu_version}"
 end
 
+desc "Build the manpage (requires scdoc on PATH)"
+task :manpage do
+    src = "docs/glu.1.scd"
+    out = "bin/glu.1"
+    unless system("command -v scdoc >/dev/null 2>&1")
+        abort "scdoc not found on PATH. Install via 'brew install scdoc' or your package manager."
+    end
+    FileUtils.mkdir_p("bin")
+    sh "scdoc < #{src} > #{out}"
+    puts "Wrote #{out}"
+end
+

@@ -110,6 +110,13 @@ func (h *FileHandler) WithGroup(name string) slog.Handler {
 	return h
 }
 
+// NewJSONHandler returns a slog.Handler that emits one JSON object per
+// log record. Thin wrapper around slog.NewJSONHandler so the call site
+// matches the NewFileHandler / NewConsoleHandler shape.
+func NewJSONHandler(out io.Writer, level slog.Level) slog.Handler {
+	return slog.NewJSONHandler(out, &slog.HandlerOptions{Level: level})
+}
+
 // MultiHandler writes to multiple handlers.
 type MultiHandler struct {
 	handlers []slog.Handler

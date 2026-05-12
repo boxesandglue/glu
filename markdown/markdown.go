@@ -2,6 +2,8 @@ package markdown
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -10,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"time"
 
 	pdf "github.com/boxesandglue/baseline-pdf"
 	"github.com/boxesandglue/boxesandglue/backend/document"
@@ -23,6 +26,7 @@ import (
 	"github.com/yuin/goldmark/parser"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
+	"github.com/boxesandglue/glu/internal/errkind"
 	luacommon "github.com/boxesandglue/glu/lua/common"
 	luafrontend "github.com/boxesandglue/glu/lua/frontend"
 )
@@ -49,20 +53,6 @@ func readAuxFile(auxPath string) (map[string]any, error) {
 		m = make(map[string]any)
 	}
 	return m, nil
-}
-
-// writeAuxFile writes aux data to disk and returns true if any value changed
-// compared to the old data (i.e. a rerun is needed).
-func writeAuxFile(auxPath string, old, cur map[string]any) (bool, error) {
-	data, err := json.MarshalIndent(cur, "", "  ")
-	if err != nil {
-		return false, err
-	}
-	if err := os.WriteFile(auxPath, data, 0644); err != nil {
-		return false, err
-	}
-	oldData, _ := json.MarshalIndent(old, "", "  ")
-	return !bytes.Equal(oldData, data), nil
 }
 
 // fireCallback fires a lifecycle callback if the registry is available.
@@ -146,6 +136,16 @@ func appendHeadingOutlines(fe *frontend.Document, headings []htmlbag.HeadingEntr
 	}
 }
 
+// Result holds post-run statistics from ProcessFile / ProcessHTMLFile.
+// Callers wanting a manifest pre-allocate one and pass it via
+// Options.Result; the markdown package populates it at the end of
+// each pass (the final pass overwrites earlier values).
+type Result struct {
+	Pages    int                    `json:"pages"`
+	Passes   int                    `json:"passes"`
+	Headings []htmlbag.HeadingEntry `json:"headings"`
+}
+
 // Options controls the Markdown processing pipeline.
 type Options struct {
 	Template      bool   // apply Go template expansion before processing
@@ -163,85 +163,243 @@ type Options struct {
 	// also auto-enables /DisplayDocTitle so PDF readers show the title in
 	// the window chrome instead of the filename.
 	Title string
+	// OutputPath is the resolved PDF output path. If empty, falls back
+	// to <input>.pdf alongside the input file.
+	OutputPath string
+	// MaxPasses caps the auto-rerun loop used to converge the aux file
+	// (forward references like total page count). Values <1 are treated
+	// as 1 (single pass, no rerun).
+	MaxPasses int
+	// SetupLua is called once per pass on a fresh lua.State to register
+	// modules. May be nil for callers that have already initialised the
+	// state (e.g. ProcessHTMLString from the htmlbag bridge — that path
+	// reuses the caller's state and ignores SetupLua entirely).
+	SetupLua func(l *lua.State)
+	// ScriptArgs becomes arg[1..n] in the Lua state. arg[0] is the
+	// input filename, arg[-1] is the interpreter (os.Args[0]).
+	ScriptArgs []string
+	// Result, if non-nil, is populated with end-of-pass statistics.
+	// The final pass's data wins. Nil disables collection.
+	Result *Result
+	// SourceDateEpoch, when non-zero, overrides the PDF CreationDate.
+	// Combined with baseline-pdf's already-deterministic /ID (MD5 of
+	// xref content) this yields byte-stable PDFs across runs with the
+	// same input — the SOURCE_DATE_EPOCH reproducible-builds protocol.
+	SourceDateEpoch time.Time
+}
+
+// resolveOutput chooses the actual PDF output path: opts.OutputPath if
+// set, otherwise <input-without-ext>.pdf. If OutputPath has no
+// extension, .pdf is appended.
+func resolveOutput(input, opt string) string {
+	if opt == "" {
+		ext := filepath.Ext(input)
+		return input[0:len(input)-len(ext)] + ".pdf"
+	}
+	if filepath.Ext(opt) == "" {
+		return opt + ".pdf"
+	}
+	return opt
+}
+
+// auxPathFor returns the aux JSON path derived from the PDF output path.
+func auxPathFor(outputPath string) string {
+	ext := filepath.Ext(outputPath)
+	return outputPath[0:len(outputPath)-len(ext)] + "-aux.json"
+}
+
+// hashAuxBytes returns a short hex hash of marshalled aux data. Used
+// for oscillation detection in the multi-pass loop.
+func hashAuxBytes(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:8])
+}
+
+// formatPDFDate produces a PDF-spec CreationDate string in the same
+// shape baseline-pdf's internal pdfDate() emits. We re-implement the
+// formatting here because baseline-pdf does not export it and we
+// need to feed the result into InfoDict before Finish runs.
+func formatPDFDate(t time.Time) string {
+	s := t.Format("20060102150405-0700")
+	return fmt.Sprintf("(D:%s%s%s'%s')", s[:14], s[14:15], s[15:17], s[17:19])
+}
+
+// pushArgTable populates Lua `arg` PUC-Rio style: arg[-1]=interpreter,
+// arg[0]=script, arg[1..n]=positional args.
+func pushArgTable(l *lua.State, scriptName string, scriptArgs []string) {
+	l.NewTable()
+	l.PushString(os.Args[0])
+	l.RawSetInt(-2, -1)
+	l.PushString(scriptName)
+	l.RawSetInt(-2, 0)
+	for i, a := range scriptArgs {
+		l.PushString(a)
+		l.RawSetInt(-2, i+1)
+	}
+	l.SetGlobal("arg")
+}
+
+// newPassState creates a fresh lua.State, registers modules via the
+// caller's SetupLua hook, and seeds the arg table.
+func newPassState(opts Options, scriptName string) *lua.State {
+	l := lua.NewState()
+	if opts.SetupLua != nil {
+		opts.SetupLua(l)
+	}
+	pushArgTable(l, scriptName, opts.ScriptArgs)
+	return l
 }
 
 // ProcessFile reads a Markdown file and produces a PDF.
-func ProcessFile(l *lua.State, filename string, opts Options) error {
+// ProcessFile reads a Markdown file and produces a PDF. The Lua state
+// is owned by this function: a fresh state is created for each pass
+// via opts.SetupLua so that {lua} blocks and the companion script
+// always see a clean environment. Auto-rerun for aux convergence is
+// driven by opts.MaxPasses; oscillation is detected by hashing the
+// written aux content.
+func ProcessFile(filename string, opts Options) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("reading %s: %w", filename, err)
+		return fmt.Errorf("%w: reading %s: %s", errkind.IO, filename, err.Error())
 	}
 	source := string(data)
 
-	// Step 1: Optional Go template expansion
 	if opts.Template {
 		tmpl, err := template.New(filepath.Base(filename)).Parse(source)
 		if err != nil {
-			return fmt.Errorf("template parse: %w", err)
+			return fmt.Errorf("%w: template parse: %s", errkind.IO, err.Error())
 		}
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, nil); err != nil {
-			return fmt.Errorf("template execute: %w", err)
+			return fmt.Errorf("%w: template execute: %s", errkind.IO, err.Error())
 		}
 		source = buf.String()
 	}
 
-	// Step 2: Extract YAML front matter
-	fm, body := extractFrontmatter(source)
+	fm, originalBody := extractFrontmatter(source)
 	slog.Debug("Frontmatter", "title", fm.Title, "author", fm.Author, "papersize", fm.Papersize, "css", fm.CSS)
 
-	// Make the entire frontmatter available as _frontmatter Lua global.
+	outputFilename := resolveOutput(filename, opts.OutputPath)
+	auxPath := auxPathFor(outputFilename)
+
+	// Debug shortcuts (single pass, no PDF). Both still need a live
+	// Lua state because {lua} blocks must run before the body is
+	// emitted to stdout.
+	if opts.DebugMarkdown || opts.DebugHTML {
+		l := newPassState(opts, filename)
+		return runMarkdownDebug(l, filename, originalBody, fm, auxPath, opts)
+	}
+
+	maxPasses := opts.MaxPasses
+	if maxPasses < 1 {
+		maxPasses = 1
+	}
+	seen := map[string]int{}
+	for pass := 1; pass <= maxPasses; pass++ {
+		if opts.Result != nil {
+			opts.Result.Passes = pass
+		}
+		l := newPassState(opts, filename)
+		changed, hash, err := runMarkdownPass(l, filename, originalBody, fm, outputFilename, auxPath, opts)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			return nil
+		}
+		if prev, ok := seen[hash]; ok {
+			slog.Warn("Aux oscillates between states — giving up", "first_pass", prev, "this_pass", pass, "hash", hash)
+			return fmt.Errorf("aux oscillates: %w", errkind.AuxNotConverged)
+		}
+		seen[hash] = pass
+		if pass < maxPasses {
+			slog.Info("Aux changed, re-running", "pass", pass, "max_passes", maxPasses)
+		}
+	}
+	slog.Warn("Aux did not converge after max passes", "max_passes", maxPasses)
+	return fmt.Errorf("aux file did not converge after %d passes: %w", maxPasses, errkind.AuxNotConverged)
+}
+
+// runMarkdownDebug runs the Markdown pipeline far enough to satisfy
+// --markdown / --html debug flags, then returns without writing a PDF.
+func runMarkdownDebug(l *lua.State, filename, body string, fm Frontmatter, auxPath string, opts Options) error {
 	luacommon.PushAny(l, any(fm.Extra))
 	l.SetGlobal("_frontmatter")
 
-	// Step 3: Load companion Lua file (e.g. example.lua for example.md)
-	// Loaded before aux so that lifecycle callbacks can be registered.
-	luaFile := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".lua"
-	if _, err := os.Stat(luaFile); err == nil {
-		slog.Info("Loading companion Lua file", "file", luaFile)
-		if err := lua.DoFile(l, luaFile); err != nil {
-			return fmt.Errorf("companion lua file %s: %w", luaFile, err)
-		}
+	if err := loadCompanionLua(l, filename); err != nil {
+		return err
 	}
-
-	// Fire document_start callback (before aux file is loaded).
 	if err := fireCallback("document_start"); err != nil {
-		return fmt.Errorf("document_start callback: %w", err)
+		return fmt.Errorf("%w: document_start callback: %s", errkind.Lua, err.Error())
 	}
-
-	// Read aux data so _aux/_toc are available to Lua blocks.
-	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
-	auxPath := strings.TrimSuffix(outputFilename, filepath.Ext(outputFilename)) + "-aux.json"
 	earlyAux, err := readAuxFile(auxPath)
 	if err != nil {
-		return fmt.Errorf("reading aux file: %w", err)
+		return fmt.Errorf("%w: reading aux file: %s", errkind.IO, err.Error())
 	}
 	setAuxGlobal(l, earlyAux)
-
-	// Fire content_ready callback (aux loaded, before content processing).
 	if err := fireCallback("content_ready"); err != nil {
-		return fmt.Errorf("content_ready callback: %w", err)
+		return fmt.Errorf("%w: content_ready callback: %s", errkind.Lua, err.Error())
 	}
-
-	// Step 4: Execute Lua blocks
 	body, err = extractAndRunLuaBlocks(l, body)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %s", errkind.Lua, err.Error())
 	}
-
-	// Step 4: Expand inline expressions
 	body, err = expandInlineExpressions(l, body)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %s", errkind.Lua, err.Error())
 	}
-
-	// Debug mode: print expanded Markdown and exit
 	if opts.DebugMarkdown {
 		fmt.Print(body)
 		return nil
 	}
+	htmlStr, err := markdownToHTML(body, fm)
+	if err != nil {
+		return err
+	}
+	fmt.Print(htmlStr)
+	return nil
+}
 
-	// Step 5: Markdown → HTML
+// runMarkdownPass executes a single pass of the Markdown pipeline on
+// the supplied (fresh) state. Returns whether the aux file changed
+// vs. the previous run, a short hash of the new aux for oscillation
+// detection, and any error.
+func runMarkdownPass(l *lua.State, filename, body string, fm Frontmatter, outputFilename, auxPath string, opts Options) (bool, string, error) {
+	luacommon.PushAny(l, any(fm.Extra))
+	l.SetGlobal("_frontmatter")
+
+	if err := loadCompanionLua(l, filename); err != nil {
+		return false, "", err
+	}
+	if err := fireCallback("document_start"); err != nil {
+		return false, "", fmt.Errorf("%w: document_start callback: %s", errkind.Lua, err.Error())
+	}
+	oldAux, err := readAuxFile(auxPath)
+	if err != nil {
+		return false, "", fmt.Errorf("%w: reading aux file: %s", errkind.IO, err.Error())
+	}
+	setAuxGlobal(l, oldAux)
+	if err := fireCallback("content_ready"); err != nil {
+		return false, "", fmt.Errorf("%w: content_ready callback: %s", errkind.Lua, err.Error())
+	}
+	body, err = extractAndRunLuaBlocks(l, body)
+	if err != nil {
+		return false, "", fmt.Errorf("%w: %s", errkind.Lua, err.Error())
+	}
+	body, err = expandInlineExpressions(l, body)
+	if err != nil {
+		return false, "", fmt.Errorf("%w: %s", errkind.Lua, err.Error())
+	}
+	htmlStr, err := markdownToHTML(body, fm)
+	if err != nil {
+		return false, "", err
+	}
+	return renderHTMLToPDF(l, htmlStr, "", outputFilename, auxPath, fm, opts, true, oldAux)
+}
+
+// markdownToHTML converts body to HTML via goldmark. Highlight style
+// comes from front matter (highlight-style key), defaulting to github.
+func markdownToHTML(body string, fm Frontmatter) (string, error) {
 	highlightStyle := "github"
 	if s, ok := fm.Extra["highlight-style"].(string); ok {
 		highlightStyle = s
@@ -269,193 +427,151 @@ func ProcessFile(l *lua.State, filename string, opts Options) error {
 	)
 	var htmlBuf bytes.Buffer
 	if err := gm.Convert([]byte(body), &htmlBuf); err != nil {
-		return fmt.Errorf("goldmark convert: %w", err)
+		return "", fmt.Errorf("%w: goldmark convert: %s", errkind.Typeset, err.Error())
 	}
-	// Strip trailing newlines inside <pre><code> blocks to avoid an extra
-	// blank line at the bottom (chroma and goldmark both add one).
+	// Strip trailing newline inside <pre><code> blocks (chroma and
+	// goldmark both add one).
 	htmlStr := preTrailingNL.ReplaceAllString(htmlBuf.String(), "$1")
 	slog.Debug("HTML generated", "length", len(htmlStr))
+	return htmlStr, nil
+}
 
-	// Debug mode: print generated HTML and exit
-	if opts.DebugHTML {
-		fmt.Print(htmlStr)
+// loadCompanionLua loads <stem>.lua next to the input file if it
+// exists. Skipped silently when no companion is present.
+func loadCompanionLua(l *lua.State, filename string) error {
+	luaFile := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".lua"
+	if _, err := os.Stat(luaFile); err != nil {
 		return nil
 	}
-
-	// Step 6: HTML → PDF via htmlbag
-	return generatePDF(l, outputFilename, htmlStr, fm, opts)
-}
-
-// ProcessHTMLFile reads an HTML file and produces a PDF.
-// Unlike Markdown mode, no default CSS is applied — styling comes from
-// <link>, <style>, inline styles, or the --css flag.
-func ProcessHTMLFile(l *lua.State, filename string, opts Options) error {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", filename, err)
+	slog.Info("Loading companion Lua file", "file", luaFile)
+	if err := lua.DoFile(l, luaFile); err != nil {
+		return fmt.Errorf("%w: companion lua file %s: %s", errkind.Lua, luaFile, err.Error())
 	}
-	htmlStr := string(data)
-
-	// Load companion Lua file (e.g. page.lua for page.html)
-	luaFile := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".lua"
-	if _, err := os.Stat(luaFile); err == nil {
-		slog.Info("Loading companion Lua file", "file", luaFile)
-		if err := lua.DoFile(l, luaFile); err != nil {
-			return fmt.Errorf("companion lua file %s: %w", luaFile, err)
-		}
-	}
-
-	outputFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".pdf"
-	baseDir, err := filepath.Abs(filepath.Dir(filename))
-	if err != nil {
-		return fmt.Errorf("resolving path: %w", err)
-	}
-
-	return ProcessHTMLString(l, htmlStr, baseDir, outputFilename, opts)
-}
-
-// ProcessHTMLString takes an HTML payload (already in memory), the directory
-// to resolve relative CSS @import / <link> paths against, and an output PDF
-// filename, and runs the same pipeline as ProcessHTMLFile.
-//
-// Useful for embedders that produce HTML on the fly (e.g. an XSL-FO walker)
-// and want to skip the disk-roundtrip of writing the HTML out and reading
-// it back in.
-func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, opts Options) error {
-	// Fire document_start callback (before aux file is loaded).
-	if err := fireCallback("document_start"); err != nil {
-		return fmt.Errorf("document_start callback: %w", err)
-	}
-
-	// Read aux data from a previous run (for forward references like counter(pages)).
-	auxPath := strings.TrimSuffix(outputFilename, ".pdf") + "-aux.json"
-	oldAux, err := readAuxFile(auxPath)
-	if err != nil {
-		return fmt.Errorf("reading aux file: %w", err)
-	}
-
-	// Set _aux and _toc globals from previous run's data.
-	setAuxGlobal(l, oldAux)
-
-	fe, err := frontend.New(outputFilename)
-	if err != nil {
-		return fmt.Errorf("creating document: %w", err)
-	}
-
-	// Apply caller-supplied document metadata. PDF/UA enables the
-	// accessibility-tagging pipeline; htmlbag picks it up via
-	// fe.Doc.Format == FormatPDFUA at cssbuilder.go:144 and emits
-	// StructTreeRoot, MarkInfo, /DisplayDocTitle, /Lang, and the
-	// per-element role mapping automatically. /Lang and /Title both
-	// also surface in plain PDF output and the XMP metadata sidecar.
-	if opts.Title != "" {
-		fe.Doc.Title = opts.Title
-	}
-	if opts.Lang != "" {
-		fe.Doc.DefaultLanguageTag = opts.Lang
-		// Load the hyphenation pattern set for this BCP47 tag. Tags
-		// without a TeX pattern (Arabic/Hebrew/CJK/unknown) resolve to
-		// a no-op hyphenator — safe to call unconditionally.
-		if l, err := frontend.GetLanguage(opts.Lang); err == nil {
-			fe.Doc.DefaultLanguage = l
-		}
-	}
-	if opts.Format == "PDF/UA" {
-		fe.Doc.Format = document.FormatPDFUA
-	}
-
-	cssParser := csshtml.NewCSSParserWithDefaults()
-	// Resolve relative CSS paths against baseDir.
-	cssParser.PushDir(baseDir)
-
-	cb, err := htmlbag.New(fe, cssParser)
-	if err != nil {
-		return fmt.Errorf("creating CSS builder: %w", err)
-	}
-	if pages, ok := oldAux["_pages"].(float64); ok {
-		cb.Counters["pages"] = int(pages)
-	}
-
-	// Install callbacks
-	if cr := luafrontend.GetRegistry(); cr != nil {
-		cr.SetCSSBuilder(cb)
-		cr.InstallPreShipout(fe)
-		cr.InstallPostElement()
-		cr.InstallPageInit()
-	}
-
-	// Load CSS from CLI flag
-	if opts.CSSFile != "" {
-		if err := cb.ReadCSSFile(opts.CSSFile); err != nil {
-			return fmt.Errorf("reading CSS file %s: %w", opts.CSSFile, err)
-		}
-	}
-
-	// Fire content_ready callback (aux loaded, before content processing).
-	if err := fireCallback("content_ready"); err != nil {
-		return fmt.Errorf("content_ready callback: %w", err)
-	}
-
-	// Convert HTML to text elements first — this processes <link> and <style>
-	// tags, making @page rules available for page initialization.
-	te, err := cb.HTMLToText(htmlStr)
-	if err != nil {
-		return fmt.Errorf("HTML to text: %w", err)
-	}
-
-	// Distribute content across pages. OutputPagesFromText splits the
-	// Text tree at forced page breaks and formats each group with the
-	// content width of its target page (respecting @page margins).
-	if err := cb.OutputPagesFromText(te); err != nil {
-		return fmt.Errorf("outputting pages: %w", err)
-	}
-
-	// Build a nested PDF outline tree from collected headings.
-	if len(cb.Headings) > 0 {
-		appendHeadingOutlines(fe, cb.Headings)
-	}
-
-	if err := fe.Finish(); err != nil {
-		return fmt.Errorf("finishing document: %w", err)
-	}
-
-	// Fire document_end callback (PDF has been written).
-	if err := fireCallback("document_end"); err != nil {
-		return fmt.Errorf("document_end callback: %w", err)
-	}
-
-	// Read _aux back from Lua (user may have modified it) and update system keys.
-	curAux := readAuxGlobal(l)
-	curAux["_pages"] = len(fe.Doc.Pages)
-	headings := make([]any, len(cb.Headings))
-	for i, h := range cb.Headings {
-		headings[i] = map[string]any{"level": h.Level, "text": h.Text, "page": h.Page}
-	}
-	curAux["_headings"] = headings
-	if changed, err := writeAuxFile(auxPath, oldAux, curAux); err != nil {
-		return fmt.Errorf("writing aux file: %w", err)
-	} else if changed {
-		slog.Info("Aux data changed — rerun to update cross-references")
-	}
-
-	slog.Info("PDF written", "file", outputFilename, "pages", len(fe.Doc.Pages))
 	return nil
 }
 
-func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontmatter, opts Options) error {
-	// Read aux data from a previous run (for pages counter and change detection).
-	// _aux/_toc globals are already set by ProcessFile.
-	auxPath := strings.TrimSuffix(outputFilename, filepath.Ext(outputFilename)) + "-aux.json"
+// ProcessHTMLFile reads an HTML file and produces a PDF, driving the
+// same multi-pass aux convergence loop as ProcessFile. Unlike Markdown
+// mode no default CSS is applied — styling comes from <link>, <style>,
+// inline styles, or the --css flag.
+func ProcessHTMLFile(filename string, opts Options) error {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("%w: reading %s: %s", errkind.IO, filename, err.Error())
+	}
+	htmlStr := string(data)
+	outputFilename := resolveOutput(filename, opts.OutputPath)
+	auxPath := auxPathFor(outputFilename)
+	baseDir, err := filepath.Abs(filepath.Dir(filename))
+	if err != nil {
+		return fmt.Errorf("%w: resolving base dir: %s", errkind.IO, err.Error())
+	}
+
+	maxPasses := opts.MaxPasses
+	if maxPasses < 1 {
+		maxPasses = 1
+	}
+	seen := map[string]int{}
+	for pass := 1; pass <= maxPasses; pass++ {
+		if opts.Result != nil {
+			opts.Result.Passes = pass
+		}
+		l := newPassState(opts, filename)
+		changed, hash, err := runHTMLPass(l, htmlStr, baseDir, outputFilename, auxPath, filename, opts)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			return nil
+		}
+		if prev, ok := seen[hash]; ok {
+			slog.Warn("Aux oscillates between states — giving up", "first_pass", prev, "this_pass", pass, "hash", hash)
+			return fmt.Errorf("aux oscillates: %w", errkind.AuxNotConverged)
+		}
+		seen[hash] = pass
+		if pass < maxPasses {
+			slog.Info("Aux changed, re-running", "pass", pass, "max_passes", maxPasses)
+		}
+	}
+	slog.Warn("Aux did not converge after max passes", "max_passes", maxPasses)
+	return fmt.Errorf("aux file did not converge after %d passes: %w", maxPasses, errkind.AuxNotConverged)
+}
+
+// runHTMLPass executes one HTML→PDF pass on the supplied state. If
+// companionLuaFilename is non-empty, its sibling <stem>.lua is loaded
+// before firing document_start. ProcessHTMLString passes "" to skip
+// companion loading entirely.
+func runHTMLPass(l *lua.State, htmlStr, baseDir, outputFilename, auxPath, companionLuaFilename string, opts Options) (bool, string, error) {
+	if companionLuaFilename != "" {
+		if err := loadCompanionLua(l, companionLuaFilename); err != nil {
+			return false, "", err
+		}
+	}
+	if err := fireCallback("document_start"); err != nil {
+		return false, "", fmt.Errorf("%w: document_start callback: %s", errkind.Lua, err.Error())
+	}
 	oldAux, err := readAuxFile(auxPath)
 	if err != nil {
-		return fmt.Errorf("reading aux file: %w", err)
+		return false, "", fmt.Errorf("%w: reading aux file: %s", errkind.IO, err.Error())
 	}
+	setAuxGlobal(l, oldAux)
+	if err := fireCallback("content_ready"); err != nil {
+		return false, "", fmt.Errorf("%w: content_ready callback: %s", errkind.Lua, err.Error())
+	}
+	// HTML mode metadata comes from opts (Title/Lang/Format), not from
+	// front matter; build a synthetic Frontmatter so renderHTMLToPDF
+	// can use one signature for both paths.
+	fm := Frontmatter{
+		Title:  opts.Title,
+		Lang:   opts.Lang,
+		Format: opts.Format,
+	}
+	return renderHTMLToPDF(l, htmlStr, baseDir, outputFilename, auxPath, fm, opts, false, oldAux)
+}
 
+// ProcessHTMLString takes an HTML payload (already in memory), the
+// directory to resolve relative CSS @import / <link> paths against,
+// and an output PDF filename, and runs the same pipeline as
+// ProcessHTMLFile but using the caller-supplied Lua state. Single-
+// pass — embedders that need aux convergence drive the loop
+// themselves (typically: htmlbag Lua bridge from a user script).
+func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, opts Options) error {
+	auxPath := auxPathFor(outputFilename)
+	changed, _, err := runHTMLPass(l, htmlStr, baseDir, outputFilename, auxPath, "", opts)
+	if err != nil {
+		return err
+	}
+	if changed {
+		slog.Info("Aux data changed — rerun to update cross-references")
+	}
+	return nil
+}
+
+// renderHTMLToPDF is the shared core for both Markdown and HTML
+// paths. The caller has already loaded the companion Lua file, fired
+// document_start / content_ready, and (for Markdown) run any {lua}
+// blocks. useDefaultCSS=true loads the built-in Markdown stylesheet
+// and applies front-matter papersize / css before InitPage(); HTML
+// mode lets <style>/<link> in the document drive @page setup.
+func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath string, fm Frontmatter, opts Options, useDefaultCSS bool, oldAux map[string]any) (bool, string, error) {
 	fe, err := frontend.New(outputFilename)
 	if err != nil {
-		return fmt.Errorf("creating document: %w", err)
+		return false, "", fmt.Errorf("%w: creating document: %s", errkind.Typeset, err.Error())
 	}
-
+	if !opts.SourceDateEpoch.IsZero() {
+		// Three sources of non-determinism in the PDF: the InfoDict
+		// CreationDate (time.Now), the XMP metadata CreateDate /
+		// ModifyDate / MetadataDate (driven by Doc.CreationDate),
+		// and the XMP DocumentID / InstanceID (uuid.New per run).
+		// SuppressInfo swaps the UUIDs for a stable hardcoded value;
+		// CreationDate fixes the date; the trailer /ID is already
+		// an MD5 of the xref byte content so it falls out as a
+		// function of the other three.
+		t := opts.SourceDateEpoch.UTC()
+		fe.Doc.PDFWriter.InfoDict["CreationDate"] = formatPDFDate(t)
+		fe.Doc.CreationDate = t
+		fe.Doc.SuppressInfo = true
+	}
 	if fm.Title != "" {
 		fe.Doc.Title = fm.Title
 	}
@@ -467,24 +583,28 @@ func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontma
 	}
 	if fm.Lang != "" {
 		fe.Doc.DefaultLanguageTag = fm.Lang
-		// Same pattern as opts.Lang above: load the hyphenation
-		// pattern set so Hyphenate has something to work with.
+		// Tags without a TeX pattern (Arabic/Hebrew/CJK/unknown)
+		// resolve to a no-op hyphenator — safe to call unconditionally.
 		if l, err := frontend.GetLanguage(fm.Lang); err == nil {
 			fe.Doc.DefaultLanguage = l
 		}
 	}
 
 	cssParser := csshtml.NewCSSParserWithDefaults()
+	if baseDir != "" {
+		cssParser.PushDir(baseDir)
+	}
+
 	cb, err := htmlbag.New(fe, cssParser)
 	if err != nil {
-		return fmt.Errorf("creating CSS builder: %w", err)
+		return false, "", fmt.Errorf("%w: creating CSS builder: %s", errkind.Typeset, err.Error())
 	}
 	if pages, ok := oldAux["_pages"].(float64); ok {
 		cb.Counters["pages"] = int(pages)
 	}
 
-	// Install pre_shipout callback hook so Lua callbacks fire on Shipout.
-	// Must happen after CSSBuilder creation so PageInfo is available.
+	// Install lifecycle callbacks. Must happen after CSSBuilder
+	// creation so PageInfo is available to the pre_shipout hook.
 	if cr := luafrontend.GetRegistry(); cr != nil {
 		cr.SetCSSBuilder(cb)
 		cr.InstallPreShipout(fe)
@@ -492,66 +612,57 @@ func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontma
 		cr.InstallPageInit()
 	}
 
-	// Load default Markdown CSS
-	if err := cb.AddCSS(defaultCSS); err != nil {
-		return fmt.Errorf("adding default CSS: %w", err)
-	}
-
-	// Apply papersize from front matter
-	if fm.Papersize != "" {
-		pageSizeCSS := fmt.Sprintf("@page { size: %s; }", fm.Papersize)
-		if err := cb.AddCSS(pageSizeCSS); err != nil {
-			return fmt.Errorf("applying papersize: %w", err)
+	if useDefaultCSS {
+		if err := cb.AddCSS(defaultCSS); err != nil {
+			return false, "", fmt.Errorf("%w: adding default CSS: %s", errkind.Typeset, err.Error())
+		}
+		if fm.Papersize != "" {
+			pageSizeCSS := fmt.Sprintf("@page { size: %s; }", fm.Papersize)
+			if err := cb.AddCSS(pageSizeCSS); err != nil {
+				return false, "", fmt.Errorf("%w: applying papersize: %s", errkind.Typeset, err.Error())
+			}
+		}
+		if fm.CSS != "" {
+			if err := cb.ReadCSSFile(fm.CSS); err != nil {
+				return false, "", fmt.Errorf("%w: reading CSS file %s: %s", errkind.IO, fm.CSS, err.Error())
+			}
 		}
 	}
-
-	// Load CSS from front matter
-	if fm.CSS != "" {
-		if err := cb.ReadCSSFile(fm.CSS); err != nil {
-			return fmt.Errorf("reading CSS file %s: %w", fm.CSS, err)
-		}
-	}
-
-	// Load CSS from CLI flag
 	if opts.CSSFile != "" {
 		if err := cb.ReadCSSFile(opts.CSSFile); err != nil {
-			return fmt.Errorf("reading CSS file %s: %w", opts.CSSFile, err)
+			return false, "", fmt.Errorf("%w: reading CSS file %s: %s", errkind.IO, opts.CSSFile, err.Error())
 		}
 	}
 
-	// Initialize the page
-	if err := cb.InitPage(); err != nil {
-		return fmt.Errorf("initializing page: %w", err)
+	// Markdown path explicitly initialises the page before
+	// HTMLToText runs because its default CSS already declares
+	// @page. HTML mode relies on HTMLToText to discover @page from
+	// the document's own <style>/<link>, so we skip InitPage there.
+	if useDefaultCSS {
+		if err := cb.InitPage(); err != nil {
+			return false, "", fmt.Errorf("%w: initializing page: %s", errkind.Typeset, err.Error())
+		}
 	}
 
-	// Convert HTML to text elements
 	te, err := cb.HTMLToText(htmlStr)
 	if err != nil {
-		return fmt.Errorf("HTML to text: %w", err)
+		return false, "", fmt.Errorf("%w: HTML to text: %s", errkind.Typeset, err.Error())
 	}
-
-	// Distribute content across pages. OutputPagesFromText splits the
-	// Text tree at forced page breaks and formats each group with the
-	// content width of its target page (respecting @page margins).
 	if err := cb.OutputPagesFromText(te); err != nil {
-		return fmt.Errorf("outputting pages: %w", err)
+		return false, "", fmt.Errorf("%w: outputting pages: %s", errkind.Typeset, err.Error())
 	}
 
-	// Build a nested PDF outline tree from collected headings.
 	if len(cb.Headings) > 0 {
 		appendHeadingOutlines(fe, cb.Headings)
 	}
 
 	if err := fe.Finish(); err != nil {
-		return fmt.Errorf("finishing document: %w", err)
+		return false, "", fmt.Errorf("%w: finishing document: %s", errkind.Typeset, err.Error())
 	}
-
-	// Fire document_end callback (PDF has been written).
 	if err := fireCallback("document_end"); err != nil {
-		return fmt.Errorf("document_end callback: %w", err)
+		return false, "", fmt.Errorf("%w: document_end callback: %s", errkind.Lua, err.Error())
 	}
 
-	// Read _aux back from Lua (user may have modified it) and update system keys.
 	curAux := readAuxGlobal(l)
 	curAux["_pages"] = len(fe.Doc.Pages)
 	headings := make([]any, len(cb.Headings))
@@ -559,12 +670,22 @@ func generatePDF(l *lua.State, outputFilename string, htmlStr string, fm Frontma
 		headings[i] = map[string]any{"level": h.Level, "text": h.Text, "page": h.Page}
 	}
 	curAux["_headings"] = headings
-	if changed, err := writeAuxFile(auxPath, oldAux, curAux); err != nil {
-		return fmt.Errorf("writing aux file: %w", err)
-	} else if changed {
-		slog.Info("Aux data changed — rerun to update cross-references")
+
+	curBytes, err := json.MarshalIndent(curAux, "", "  ")
+	if err != nil {
+		return false, "", fmt.Errorf("%w: marshalling aux: %s", errkind.IO, err.Error())
+	}
+	if err := os.WriteFile(auxPath, curBytes, 0644); err != nil {
+		return false, "", fmt.Errorf("%w: writing aux file: %s", errkind.IO, err.Error())
+	}
+	oldBytes, _ := json.MarshalIndent(oldAux, "", "  ")
+	changed := !bytes.Equal(oldBytes, curBytes)
+
+	if opts.Result != nil {
+		opts.Result.Pages = len(fe.Doc.Pages)
+		opts.Result.Headings = append([]htmlbag.HeadingEntry(nil), cb.Headings...)
 	}
 
 	slog.Info("PDF written", "file", outputFilename, "pages", len(fe.Doc.Pages))
-	return nil
+	return changed, hashAuxBytes(curBytes), nil
 }
