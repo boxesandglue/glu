@@ -180,7 +180,7 @@ func dothings() error {
 	}
 
 	if showVersion {
-		fmt.Printf("glu version %s\n", Version)
+		printVersion(os.Stdout)
 		return nil
 	}
 
@@ -276,7 +276,7 @@ func dothings() error {
 	}
 	switch op.Extra[0] {
 	case "version":
-		fmt.Printf("glu version %s\n", Version)
+		printVersion(os.Stdout)
 		return nil
 	case "help":
 		op.Help()
