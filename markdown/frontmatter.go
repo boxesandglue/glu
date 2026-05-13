@@ -17,10 +17,10 @@ type Frontmatter struct {
 	Extra     map[string]any `yaml:"-"` // all key-value pairs (including the known ones)
 }
 
-// extractFrontmatter separates YAML front matter from the Markdown body.
+// ExtractFrontmatter separates YAML front matter from the Markdown body.
 // The front matter must be delimited by "---" lines at the beginning of the file.
 // Returns the parsed front matter and the remaining Markdown content.
-func extractFrontmatter(source string) (Frontmatter, string) {
+func ExtractFrontmatter(source string) (Frontmatter, string) {
 	var fm Frontmatter
 
 	trimmed := strings.TrimLeft(source, " \t\r\n")

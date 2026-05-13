@@ -276,7 +276,7 @@ func ProcessFile(filename string, opts Options) error {
 		source = buf.String()
 	}
 
-	fm, originalBody := extractFrontmatter(source)
+	fm, originalBody := ExtractFrontmatter(source)
 	slog.Debug("Frontmatter", "title", fm.Title, "author", fm.Author, "papersize", fm.Papersize, "css", fm.CSS)
 
 	outputFilename := resolveOutput(filename, opts.OutputPath)

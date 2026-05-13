@@ -25,6 +25,7 @@ require (
 	github.com/boxesandglue/gofpdi v1.0.23 // indirect
 	github.com/boxesandglue/mpgo v0.1.6 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
+	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/speedata/barcode v1.1.1 // indirect
 	github.com/speedata/css v1.0.5 // indirect
@@ -32,5 +33,6 @@ require (
 	github.com/speedata/goxpath v1.0.12 // indirect
 	github.com/speedata/hyphenation v1.0.2 // indirect
 	golang.org/x/net v0.48.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 )

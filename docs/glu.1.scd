@@ -87,6 +87,22 @@ forwarded — see *MULTI-CALL BINARY*.
 *--cpuprofile* _FILE_
 	Write a Go pprof CPU profile to _FILE_.
 
+*-w*, *--watch*
+	Re-render the input whenever a watched file changes. The watch
+	set is computed once at startup and contains: the input file,
+	the companion _<stem>.lua_ (if present), the *--css* argument,
+	and the *css:* field from the Markdown frontmatter (resolved
+	cwd-relative first, then relative to the input directory).
+	Editing the frontmatter *css:* value to a different filename
+	mid-session does not re-scan the watch set — restart *glu* in
+	that case.
+
+	Events are debounced (200 ms) and coalesced — bursts of editor
+	saves collapse into a single rebuild. Errors during a rebuild
+	are logged but never exit the loop. *Ctrl-C* exits.
+	Incompatible with stdin input and with *--markdown* / *--html*
+	debug modes.
+
 *-v*, *--version*
 	Print version and exit.
 

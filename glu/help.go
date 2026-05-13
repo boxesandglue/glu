@@ -33,6 +33,13 @@ EXAMPLES
   glu --manifest build.json story.md
       Write a JSON sidecar with pages, passes, duration, headings.
 
+  glu --watch story.md
+      Rebuild story.pdf whenever story.md, story.lua (if present), the
+      --css file, or the frontmatter css: file changes. The list is
+      computed once at watch start — editing 'css: a.css' to 'css:
+      b.css' inside the frontmatter won't pick up b.css until next
+      restart. Ctrl-C exits.
+
   glu completion zsh > ~/.zfunc/_glu
       Generate shell completion. Supported: bash, zsh, fish.
       For bash:  glu completion bash > /etc/bash_completion.d/glu

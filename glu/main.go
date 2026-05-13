@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	pdf "github.com/boxesandglue/baseline-pdf"
@@ -146,6 +149,7 @@ func dothings() error {
 	var inputFormat string
 	var manifestPath string
 	var sourceDateEpochStr string
+	var watchMode bool
 	op := optionparser.NewOptionParser()
 	op.Banner = "glu - typesetting with boxes and glue"
 	op.Coda = helpCoda()
@@ -160,6 +164,7 @@ func dothings() error {
 	op.On("--input-format FMT", "Force input format for stdin: md, html, or lua", &inputFormat)
 	op.On("--manifest FILE", "Write a JSON manifest (pages, passes, headings, duration)", &manifestPath)
 	op.On("--source-date-epoch SECONDS", "Override PDF CreationDate (also honours $SOURCE_DATE_EPOCH)", &sourceDateEpochStr)
+	op.On("-w", "--watch", "Re-render on changes to input, companion .lua, or --css file", &watchMode)
 	op.On("--template", "Apply Go template expansion (Markdown mode)", &useTemplate)
 	op.On("--css FILE", "Additional CSS file", &cssFile)
 	op.On("--markdown", "Print expanded Markdown to stdout (debug)", &debugMarkdown)
@@ -298,6 +303,16 @@ func dothings() error {
 	mainfile, scriptArgs := op.Extra[0], op.Extra[1:]
 	originalInput := mainfile
 
+	// --watch is incompatible with stdin (no file to watch) and with
+	// the --markdown / --html debug shortcuts (they print and exit;
+	// rebuilding them would just spam stdout).
+	if watchMode && mainfile == "-" {
+		return fmt.Errorf("%w: --watch is incompatible with stdin input", errkind.Usage)
+	}
+	if watchMode && (debugMarkdown || debugHTML) {
+		return fmt.Errorf("%w: --watch is incompatible with --markdown / --html debug modes", errkind.Usage)
+	}
+
 	// Stdin input: `-` reads from os.Stdin and writes to a temp file
 	// so the rest of the pipeline (extension dispatch, companion lua
 	// lookup, aux file placement) keeps working. Companion .lua won't
@@ -395,59 +410,80 @@ func dothings() error {
 		logger.Info("Running in --safe mode (Lua sandboxed: no io/os/debug)")
 	}
 
-	var result *markdown.Result
-	if manifestPath != "" {
-		result = &markdown.Result{}
-	}
-
 	ext := filepath.Ext(mainfile)
-	switch ext {
-	case ".lua":
-		// Direct Lua entry: single-shot, fresh state, no aux loop.
-		l := lua.NewState()
-		setupLua(l)
-		pushArgTable(l, mainfile, scriptArgs)
-		if err := lua.DoFile(l, mainfile); err != nil {
-			return fmt.Errorf("%w: %s", errkind.Lua, err.Error())
+	// build runs exactly one render pass. In --watch mode this
+	// closure is re-invoked per file-change event; otherwise it is
+	// called once.
+	build := func() error {
+		buildStart := time.Now()
+		var result *markdown.Result
+		if manifestPath != "" {
+			result = &markdown.Result{}
 		}
-	case ".md":
-		opts := markdown.Options{
-			Template:        useTemplate,
-			CSSFile:         cssFile,
-			DebugMarkdown:   debugMarkdown,
-			DebugHTML:       debugHTML,
-			OutputPath:      resolvedOutput,
-			MaxPasses:       maxPasses,
-			SetupLua:        setupLua,
-			ScriptArgs:      scriptArgs,
-			Result:          result,
-			SourceDateEpoch: sourceDateEpoch,
+		switch ext {
+		case ".lua":
+			// Direct Lua entry: single-shot, fresh state, no aux loop.
+			l := lua.NewState()
+			setupLua(l)
+			pushArgTable(l, mainfile, scriptArgs)
+			if err := lua.DoFile(l, mainfile); err != nil {
+				return fmt.Errorf("%w: %s", errkind.Lua, err.Error())
+			}
+		case ".md":
+			opts := markdown.Options{
+				Template:        useTemplate,
+				CSSFile:         cssFile,
+				DebugMarkdown:   debugMarkdown,
+				DebugHTML:       debugHTML,
+				OutputPath:      resolvedOutput,
+				MaxPasses:       maxPasses,
+				SetupLua:        setupLua,
+				ScriptArgs:      scriptArgs,
+				Result:          result,
+				SourceDateEpoch: sourceDateEpoch,
+			}
+			if err := markdown.ProcessFile(mainfile, opts); err != nil {
+				return err
+			}
+		case ".html", ".htm":
+			opts := markdown.Options{
+				CSSFile:         cssFile,
+				OutputPath:      resolvedOutput,
+				MaxPasses:       maxPasses,
+				SetupLua:        setupLua,
+				ScriptArgs:      scriptArgs,
+				Result:          result,
+				SourceDateEpoch: sourceDateEpoch,
+			}
+			if err := markdown.ProcessHTMLFile(mainfile, opts); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("%w: unsupported file extension: %s (expected .lua, .md, or .html)", errkind.Usage, ext)
 		}
-		if err := markdown.ProcessFile(mainfile, opts); err != nil {
-			return err
+
+		if manifestPath != "" {
+			if err := writeManifest(manifestPath, originalInput, resolvedOutput, time.Since(buildStart), result); err != nil {
+				return err
+			}
+			logger.Info("Manifest written", "file", manifestPath)
 		}
-	case ".html", ".htm":
-		opts := markdown.Options{
-			CSSFile:         cssFile,
-			OutputPath:      resolvedOutput,
-			MaxPasses:       maxPasses,
-			SetupLua:        setupLua,
-			ScriptArgs:      scriptArgs,
-			Result:          result,
-			SourceDateEpoch: sourceDateEpoch,
-		}
-		if err := markdown.ProcessHTMLFile(mainfile, opts); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("%w: unsupported file extension: %s (expected .lua, .md, or .html)", errkind.Usage, ext)
+		logger.Info("Build done", "duration", time.Since(buildStart).String())
+		return nil
 	}
 
-	if manifestPath != "" {
-		if err := writeManifest(manifestPath, originalInput, resolvedOutput, time.Since(now), result); err != nil {
+	if watchMode {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := runWatch(ctx, watchPaths(mainfile, cssFile), build); err != nil {
 			return err
 		}
-		logger.Info("Manifest written", "file", manifestPath)
+		logger.Info("Watch stopped")
+		return nil
+	}
+
+	if err := build(); err != nil {
+		return err
 	}
 
 	elapsed := time.Since(now)
