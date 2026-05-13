@@ -1,0 +1,53 @@
+name: Smoke
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Install poppler (for golden tests)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y poppler-utils
+          else
+            brew install poppler
+          fi
+
+      - name: Build glu
+        run: go build -ldflags '-s -w -X main.Version=ci-${{ github.sha }}' -o bin/glu ./glu
+
+      - name: Sanity-check binary
+        shell: bash
+        run: |
+          ./bin/glu --version
+          ./bin/glu doctor || echo "doctor reported warnings (non-fatal in CI)"
+
+      - name: Run golden tests
+        run: go test -v -run Golden ./glu
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.os }}-actual
+          path: |
+            testdata/golden/**/actual.pdf
+            testdata/golden/**/actual.png
+          if-no-files-found: ignore
