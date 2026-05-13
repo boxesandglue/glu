@@ -266,4 +266,3 @@ func writeActuals(t *testing.T, dir string, actualPDF, actualPNG []byte) {
 		_ = os.WriteFile(filepath.Join(dir, "actual.png"), actualPNG, 0644)
 	}
 }
-

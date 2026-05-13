@@ -45,7 +45,7 @@ func runDoctor(out io.Writer) int {
 }
 
 type doctor struct {
-	out                io.Writer
+	out               io.Writer
 	oks, warns, fails int
 }
 
