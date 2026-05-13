@@ -8,7 +8,8 @@ glu - typesetting with boxes and glue
 
 *glu* [_options_] _FILE_++
 *glu* [_options_] *--input-format* _FMT_ *-o* _PDF_ *-*++
-*glu* *doctor*
+*glu* *doctor*++
+*glu* *completion* _bash_|_zsh_|_fish_
 
 # DESCRIPTION
 
@@ -104,6 +105,20 @@ forwarded — see *MULTI-CALL BINARY*.
 
 *help*
 	Same as *--help*.
+
+*completion* _SHELL_
+	Write a shell completion script to stdout. _SHELL_ is *bash*,
+	*zsh*, or *fish*. Examples:
+
+	```
+	glu completion bash > /etc/bash_completion.d/glu
+	glu completion zsh  > ~/.zfunc/_glu
+	glu completion fish > ~/.config/fish/completions/glu.fish
+	```
+
+	Options that take a value (e.g. *-o*, *--css*) get file completion
+	as a best-effort default since the parser has no knowledge of the
+	value's semantics.
 
 # FRONTMATTER
 

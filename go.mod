@@ -12,7 +12,7 @@ require (
 	github.com/boxesandglue/textshape v0.0.10
 	github.com/speedata/cxpath v0.0.9
 	github.com/speedata/go-lua v0.1.6
-	github.com/speedata/optionparser v1.1.1
+	github.com/speedata/optionparser v1.2.1
 	github.com/yuin/goldmark v1.7.16
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	gopkg.in/yaml.v3 v3.0.1

@@ -8,6 +8,7 @@ func helpCoda() string {
 Usage: glu [options] <filename.lua|filename.md|filename.html>
        glu [options] --input-format md -o out.pdf -   (read from stdin)
        glu doctor                                     (environment checks)
+       glu completion bash|zsh|fish                   (shell completion)
 
 EXAMPLES
 
@@ -31,6 +32,11 @@ EXAMPLES
 
   glu --manifest build.json story.md
       Write a JSON sidecar with pages, passes, duration, headings.
+
+  glu completion zsh > ~/.zfunc/_glu
+      Generate shell completion. Supported: bash, zsh, fish.
+      For bash:  glu completion bash > /etc/bash_completion.d/glu
+      For fish:  glu completion fish > ~/.config/fish/completions/glu.fish
 
 FRONTMATTER (Markdown mode, YAML between '---' lines)
 

@@ -169,6 +169,7 @@ func dothings() error {
 	op.Command("help", "Show the help message")
 	op.Command("version", "Print version and exit")
 	op.Command("doctor", "Run environment self-checks")
+	op.Command("completion", "Print shell completion script (bash|zsh|fish)")
 	if err := op.Parse(); err != nil {
 		// --help / -h prints the help text and returns ErrHelp — not
 		// an actual error from the user's perspective.
@@ -283,6 +284,14 @@ func dothings() error {
 	case "doctor":
 		if n := runDoctor(os.Stdout); n > 0 {
 			return fmt.Errorf("doctor reported %d failure(s)", n)
+		}
+		return nil
+	case "completion":
+		if len(op.Extra) < 2 {
+			return fmt.Errorf("%w: completion requires a shell argument: bash, zsh or fish", errkind.Usage)
+		}
+		if err := op.GenerateCompletion(op.Extra[1], "glu", os.Stdout); err != nil {
+			return fmt.Errorf("%w: %s", errkind.Usage, err.Error())
 		}
 		return nil
 	}
