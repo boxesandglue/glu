@@ -164,8 +164,15 @@ func expandInlineExpressions(l *lua.State, source string) (string, error) {
 			luaErr = fmt.Errorf("inline expression {= %s =}: %w", expr, err)
 			return match
 		}
-		// Get the result from the top of the stack
-		val := lua.CheckString(l, -1)
+		// Coerce the top-of-stack to a string, matching Lua's
+		// own tostring() semantics (numbers / booleans / nil all
+		// stringify naturally; tables / functions become a type
+		// tag). CheckString here would have errored on numbers,
+		// which made `{= 2+2 =}` blow up.
+		val, ok := l.ToString(-1)
+		if !ok {
+			val = fmt.Sprintf("%v", l.ToValue(-1))
+		}
 		l.Pop(1)
 		return val
 	})
