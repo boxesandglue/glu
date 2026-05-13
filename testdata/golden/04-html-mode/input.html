@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page { size: a5; margin: 1.5cm; }
+body { font-family: serif; font-size: 11pt; line-height: 1.4; }
+h1 { color: #336699; }
+.callout { background: #f0f4f8; padding: 0.4em 0.8em; border-left: 3pt solid #336699; }
+</style>
+</head>
+<body>
+<h1>HTML Mode Smoke</h1>
+<p>HTML mode skips Markdown conversion entirely. Styling comes from
+the embedded <code>&lt;style&gt;</code> tag instead of glu's
+default Markdown stylesheet.</p>
+<p class="callout">This paragraph uses a class-scoped callout style
+to verify CSS class selectors round-trip into the PDF.</p>
+</body>
+</html>
