@@ -9,6 +9,8 @@ Usage: glu [options] <filename.lua|filename.md|filename.html>
        glu [options] --input-format md -o out.pdf -   (read from stdin)
        glu doctor                                     (environment checks)
        glu completion bash|zsh|fish                   (shell completion)
+       glu init [DIR] [TEMPLATE]                      (scaffold a project)
+       glu init list                                  (list templates)
 
 EXAMPLES
 
@@ -39,6 +41,11 @@ EXAMPLES
       computed once at watch start — editing 'css: a.css' to 'css:
       b.css' inside the frontmatter won't pick up b.css until next
       restart. Ctrl-C exits.
+
+  glu init mydoc report
+      Scaffold a new glu project in ./mydoc using the 'report' template
+      (index.md + index.lua + style.css). Run 'glu init list' to see
+      all available templates.
 
   glu completion zsh > ~/.zfunc/_glu
       Generate shell completion. Supported: bash, zsh, fish.

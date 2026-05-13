@@ -175,6 +175,7 @@ func dothings() error {
 	op.Command("version", "Print version and exit")
 	op.Command("doctor", "Run environment self-checks")
 	op.Command("completion", "Print shell completion script (bash|zsh|fish)")
+	op.Command("init", "Scaffold a new glu project (run 'glu init list' for templates)")
 	if err := op.Parse(); err != nil {
 		// --help / -h prints the help text and returns ErrHelp — not
 		// an actual error from the user's perspective.
@@ -299,6 +300,8 @@ func dothings() error {
 			return fmt.Errorf("%w: %s", errkind.Usage, err.Error())
 		}
 		return nil
+	case "init":
+		return runInit(op.Extra[1:])
 	}
 	mainfile, scriptArgs := op.Extra[0], op.Extra[1:]
 	originalInput := mainfile

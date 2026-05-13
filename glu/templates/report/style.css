@@ -1,0 +1,39 @@
+/* Project-specific overrides on top of glu's default Markdown stylesheet. */
+
+@page {
+    size: a4;
+    margin: 2.5cm 2cm 3cm 2cm;
+
+    @bottom-center {
+        content: counter(page);
+        font-size: 9pt;
+        color: #666;
+    }
+}
+
+body {
+    font-size: 11pt;
+    line-height: 1.4;
+}
+
+h1 {
+    color: #2a4a6b;
+    margin-top: 1.2em;
+}
+
+h2 {
+    color: #4a6b8a;
+}
+
+blockquote {
+    border-left: 3pt solid #aaa;
+    padding-left: 0.8em;
+    color: #555;
+    font-style: italic;
+}
+
+code {
+    background: #f4f4f4;
+    padding: 0 0.2em;
+    border-radius: 2pt;
+}

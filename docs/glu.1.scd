@@ -122,6 +122,20 @@ forwarded — see *MULTI-CALL BINARY*.
 *help*
 	Same as *--help*.
 
+*init* [_DIR_] [_TEMPLATE_]
+	Scaffold a new glu project in _DIR_ (default: current directory)
+	from _TEMPLATE_ (default: *report*). Refuses to overwrite any
+	existing file. The available templates are *bare* (one
+	_index.md_), *report* (_index.md_ + _index.lua_ + _style.css_),
+	and *pdfua* (_index.md_ pre-configured for tagged-PDF/UA
+	output).
+
+	*glu init list* prints the available templates with a one-line
+	description each.
+
+	A target directory literally named "list" needs to be passed as
+	*./list* to dodge the list-subcommand special case.
+
 *completion* _SHELL_
 	Write a shell completion script to stdout. _SHELL_ is *bash*,
 	*zsh*, or *fish*. Examples:
