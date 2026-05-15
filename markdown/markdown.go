@@ -602,6 +602,26 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if pages, ok := oldAux["_pages"].(float64); ok {
 		cb.Counters["pages"] = int(pages)
 	}
+	if anchorsRaw, ok := oldAux["_anchors"].(map[string]any); ok {
+		anchorPages := make(map[string]int, len(anchorsRaw))
+		anchorTexts := make(map[string]string, len(anchorsRaw))
+		for id, raw := range anchorsRaw {
+			switch v := raw.(type) {
+			case float64:
+				// Legacy aux format: _anchors was just id → page.
+				anchorPages[id] = int(v)
+			case map[string]any:
+				if p, ok := v["page"].(float64); ok {
+					anchorPages[id] = int(p)
+				}
+				if t, ok := v["text"].(string); ok {
+					anchorTexts[id] = t
+				}
+			}
+		}
+		cb.SetAnchorPages(anchorPages)
+		cb.SetAnchorTexts(anchorTexts)
+	}
 
 	// Install lifecycle callbacks. Must happen after CSSBuilder
 	// creation so PageInfo is available to the pre_shipout hook.
@@ -670,6 +690,16 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 		headings[i] = map[string]any{"level": h.Level, "text": h.Text, "page": h.Page}
 	}
 	curAux["_headings"] = headings
+	anchors := make(map[string]any, len(cb.Anchors))
+	for _, a := range cb.Anchors {
+		if a.ID != "" && a.Page > 0 {
+			anchors[a.ID] = map[string]any{
+				"page": a.Page,
+				"text": a.Text,
+			}
+		}
+	}
+	curAux["_anchors"] = anchors
 
 	curBytes, err := json.MarshalIndent(curAux, "", "  ")
 	if err != nil {
