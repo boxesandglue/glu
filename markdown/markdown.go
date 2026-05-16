@@ -215,15 +215,6 @@ func hashAuxBytes(b []byte) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// formatPDFDate produces a PDF-spec CreationDate string in the same
-// shape baseline-pdf's internal pdfDate() emits. We re-implement the
-// formatting here because baseline-pdf does not export it and we
-// need to feed the result into InfoDict before Finish runs.
-func formatPDFDate(t time.Time) string {
-	s := t.Format("20060102150405-0700")
-	return fmt.Sprintf("(D:%s%s%s'%s')", s[:14], s[14:15], s[15:17], s[17:19])
-}
-
 // pushArgTable populates Lua `arg` PUC-Rio style: arg[-1]=interpreter,
 // arg[0]=script, arg[1..n]=positional args.
 func pushArgTable(l *lua.State, scriptName string, scriptArgs []string) {
@@ -559,16 +550,15 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 		return false, "", fmt.Errorf("%w: creating document: %s", errkind.Typeset, err.Error())
 	}
 	if !opts.SourceDateEpoch.IsZero() {
-		// Three sources of non-determinism in the PDF: the InfoDict
-		// CreationDate (time.Now), the XMP metadata CreateDate /
-		// ModifyDate / MetadataDate (driven by Doc.CreationDate),
-		// and the XMP DocumentID / InstanceID (uuid.New per run).
-		// SuppressInfo swaps the UUIDs for a stable hardcoded value;
-		// CreationDate fixes the date; the trailer /ID is already
-		// an MD5 of the xref byte content so it falls out as a
-		// function of the other three.
+		// Override the library-level SOURCE_DATE_EPOCH default
+		// (boxesandglue/frontend.New reads the env directly) with the
+		// CLI flag --source-date-epoch or an explicit programmatic
+		// caller value. SuppressInfo swaps the XMP DocumentID /
+		// InstanceID UUIDs for stable hardcoded values; the InfoDict
+		// CreationDate is written by the document Finish path from
+		// Doc.CreationDate; the trailer /ID is an MD5 of the xref
+		// byte content and falls out deterministically.
 		t := opts.SourceDateEpoch.UTC()
-		fe.Doc.PDFWriter.InfoDict["CreationDate"] = formatPDFDate(t)
 		fe.Doc.CreationDate = t
 		fe.Doc.SuppressInfo = true
 	}
