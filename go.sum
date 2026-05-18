@@ -20,12 +20,12 @@ github.com/boxesandglue/gofpdi v1.0.23 h1:1dDjmFC97QDrGi3whCX2qCG03bkFXY+dLk85+Z
 github.com/boxesandglue/gofpdi v1.0.23/go.mod h1:4wg4byd8re5WDzpSp9F4ODu5UjbeBc0sXXx15HTK4OI=
 github.com/boxesandglue/hobby v0.0.6 h1:XK+/9y9zrun5QRunErabOXlVgJAffsRugDOV8ZzpifE=
 github.com/boxesandglue/hobby v0.0.6/go.mod h1:ZNXUflymi6jqi2BnUI1Q772sLVa/Zshwuk11+u56SKU=
-github.com/boxesandglue/htmlbag v0.0.22 h1:BUTtBWRig4zp6SpJ9iVDc5drJgxZAcK3cikGEQXx/A8=
-github.com/boxesandglue/htmlbag v0.0.22/go.mod h1:CgeqO5jV68QROlfHrv46AW6nQav6Z81Dd5e7ewzDFXs=
+github.com/boxesandglue/htmlbag v0.0.23 h1:/kXE+EbltaFSPA/3T6sosIv8hMKgtedJhqf429+A5FY=
+github.com/boxesandglue/htmlbag v0.0.23/go.mod h1:CgeqO5jV68QROlfHrv46AW6nQav6Z81Dd5e7ewzDFXs=
 github.com/boxesandglue/mpgo v0.1.6 h1:OOheGAJxtxUoMqah/wY4+Z2lKEPyymZIRQFUSGdx0jE=
 github.com/boxesandglue/mpgo v0.1.6/go.mod h1:CSdH7HVFUh6nx6+Hraei99Oiezq4bPcj0gruOv9X+cA=
-github.com/boxesandglue/svgreader v0.0.2 h1:wigrSNAXDCeW/fy2eDvGrPUjc/GtM6zjPIvxCI/J1kg=
-github.com/boxesandglue/svgreader v0.0.2/go.mod h1:EGGvqEiNQsKBrnLYqDfMznN044fFcKkCHrXDLYJ56IY=
+github.com/boxesandglue/svgreader v0.0.3 h1:8RWoO9WS4JCQyQ+fV9OziezUFMKXbeYjQtYI5JyUukc=
+github.com/boxesandglue/svgreader v0.0.3/go.mod h1:EGGvqEiNQsKBrnLYqDfMznN044fFcKkCHrXDLYJ56IY=
 github.com/boxesandglue/textshape v0.0.11 h1:9Rn7IROXWIBnkRZFWoqJeuYYxEzZFOKJFB9BNQD1sMo=
 github.com/boxesandglue/textshape v0.0.11/go.mod h1:DdRw4tpKs6xFaulvBfut/ICZGXgZeibMhoLrQycmVh8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

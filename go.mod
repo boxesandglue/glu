@@ -7,8 +7,8 @@ require (
 	github.com/boxesandglue/boxesandglue v0.2.24
 	github.com/boxesandglue/csshtml v0.0.11
 	github.com/boxesandglue/hobby v0.0.6
-	github.com/boxesandglue/htmlbag v0.0.22
-	github.com/boxesandglue/svgreader v0.0.2
+	github.com/boxesandglue/htmlbag v0.0.23
+	github.com/boxesandglue/svgreader v0.0.3
 	github.com/boxesandglue/textshape v0.0.11
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/speedata/cxpath v0.0.9
