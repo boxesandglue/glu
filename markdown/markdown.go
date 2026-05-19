@@ -111,12 +111,25 @@ var outlineDepth = map[string]int{
 // stack size, which prevents a missing-parent panic.
 func appendHeadingOutlines(fe *frontend.Document, headings []htmlbag.HeadingEntry) {
 	var stack []*pdf.Outline
+	ua2 := fe.Doc.Format == document.FormatPDFUA2
 	for _, h := range headings {
 		if h.Page <= 0 || h.Page > len(fe.Doc.Pages) {
 			continue
 		}
-		pg := fe.Doc.Pages[h.Page-1]
-		dest := fmt.Sprintf("[%s /Fit]", pg.Objectnumber.Ref())
+		var dest string
+		if ua2 && h.SE != nil {
+			// PDF/UA-2 §8.8: intra-document destinations must be
+			// structure destinations. Pre-allocate the SE object now
+			// so Finish() reuses it instead of allocating a new one;
+			// the outline /Dest then targets the StructElem directly.
+			if h.SE.Obj == nil {
+				h.SE.Obj = fe.Doc.PDFWriter.NewObject()
+			}
+			dest = fmt.Sprintf("[%s /Fit]", h.SE.Obj.ObjectNumber.Ref())
+		} else {
+			pg := fe.Doc.Pages[h.Page-1]
+			dest = fmt.Sprintf("[%s /Fit]", pg.Objectnumber.Ref())
+		}
 
 		depth := min(outlineDepth[h.Level], len(stack))
 
@@ -568,8 +581,11 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if fm.Author != "" {
 		fe.Doc.Author = fm.Author
 	}
-	if fm.Format == "PDF/UA" {
+	switch fm.Format {
+	case "PDF/UA", "PDF/UA-1":
 		fe.Doc.Format = document.FormatPDFUA
+	case "PDF/UA-2":
+		fe.Doc.Format = document.FormatPDFUA2
 	}
 	if fm.Lang != "" {
 		fe.Doc.DefaultLanguageTag = fm.Lang

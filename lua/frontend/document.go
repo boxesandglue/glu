@@ -574,10 +574,12 @@ func documentNewIndex(l *lua.State) int {
 			d.Value.Doc.Format = document.FormatPDFX3
 		case "PDF/X-4":
 			d.Value.Doc.Format = document.FormatPDFX4
-		case "PDF/UA":
+		case "PDF/UA", "PDF/UA-1":
 			d.Value.Doc.Format = document.FormatPDFUA
+		case "PDF/UA-2":
+			d.Value.Doc.Format = document.FormatPDFUA2
 		default:
-			lua.Errorf(l, "unknown format: %s (use PDF, PDF/A-3b, PDF/X-3, PDF/X-4, PDF/UA)", formatStr)
+			lua.Errorf(l, "unknown format: %s (use PDF, PDF/A-3b, PDF/X-3, PDF/X-4, PDF/UA, PDF/UA-2)", formatStr)
 		}
 	case "language":
 		lang := checkLanguage(l, 3)
