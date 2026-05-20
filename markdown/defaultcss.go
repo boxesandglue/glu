@@ -11,6 +11,11 @@ body {
 	font-family: serif;
 	font-size: 10pt;
 	line-height: 1.4;
+	/* Markdown content rarely sets an explicit direction, so the base
+	 * direction is derived from the first strong character (CSS Writing
+	 * Modes 3 §2.4). HTML mode has no default stylesheet and therefore
+	 * defaults to the CSS UA value of "isolate", i.e. strict LTR. */
+	unicode-bidi: plaintext;
 }
 
 h1 {
