@@ -8,13 +8,25 @@ import (
 
 // Frontmatter holds metadata extracted from the YAML front matter block.
 type Frontmatter struct {
-	Title     string         `yaml:"title"`
-	Author    string         `yaml:"author"`
-	CSS       string         `yaml:"css"`
-	Papersize string         `yaml:"papersize"`
-	Format    string         `yaml:"format"`
-	Lang      string         `yaml:"lang"`
-	Extra     map[string]any `yaml:"-"` // all key-value pairs (including the known ones)
+	Title       string           `yaml:"title"`
+	Author      string           `yaml:"author"`
+	CSS         string           `yaml:"css"`
+	Papersize   string           `yaml:"papersize"`
+	Format      string           `yaml:"format"`
+	Lang        string           `yaml:"lang"`
+	Attachments []AttachmentSpec `yaml:"attachments"`
+	Extra       map[string]any   `yaml:"-"` // all key-value pairs (including the known ones)
+}
+
+// AttachmentSpec is a single entry in the Frontmatter Attachments list. File is
+// the only required field; the path is resolved relative to the Markdown
+// source file at render time. Name defaults to basename(File); MimeType
+// defaults to "application/octet-stream".
+type AttachmentSpec struct {
+	File        string `yaml:"file"`
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	MimeType    string `yaml:"mimetype"`
 }
 
 // ExtractFrontmatter separates YAML front matter from the Markdown body.

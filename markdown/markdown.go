@@ -289,9 +289,14 @@ func ProcessFile(filename string, opts Options) error {
 	// Debug shortcuts (single pass, no PDF). Both still need a live
 	// Lua state because {lua} blocks must run before the body is
 	// emitted to stdout.
+	sourceDir, err := filepath.Abs(filepath.Dir(filename))
+	if err != nil {
+		return fmt.Errorf("%w: resolving source dir: %s", errkind.IO, err.Error())
+	}
+
 	if opts.DebugMarkdown || opts.DebugHTML {
 		l := newPassState(opts, filename)
-		return runMarkdownDebug(l, filename, originalBody, fm, auxPath, opts)
+		return runMarkdownDebug(l, filename, sourceDir, originalBody, fm, auxPath, opts)
 	}
 
 	maxPasses := opts.MaxPasses
@@ -304,7 +309,7 @@ func ProcessFile(filename string, opts Options) error {
 			opts.Result.Passes = pass
 		}
 		l := newPassState(opts, filename)
-		changed, hash, err := runMarkdownPass(l, filename, originalBody, fm, outputFilename, auxPath, opts)
+		changed, hash, err := runMarkdownPass(l, filename, sourceDir, originalBody, fm, outputFilename, auxPath, opts)
 		if err != nil {
 			return err
 		}
@@ -326,7 +331,8 @@ func ProcessFile(filename string, opts Options) error {
 
 // runMarkdownDebug runs the Markdown pipeline far enough to satisfy
 // --markdown / --html debug flags, then returns without writing a PDF.
-func runMarkdownDebug(l *lua.State, filename, body string, fm Frontmatter, auxPath string, opts Options) error {
+func runMarkdownDebug(l *lua.State, filename, sourceDir, body string, fm Frontmatter, auxPath string, opts Options) error {
+	_ = sourceDir // unused in debug path (no PDF, no attachments)
 	luacommon.PushAny(l, any(fm.Extra))
 	l.SetGlobal("_frontmatter")
 
@@ -368,7 +374,7 @@ func runMarkdownDebug(l *lua.State, filename, body string, fm Frontmatter, auxPa
 // the supplied (fresh) state. Returns whether the aux file changed
 // vs. the previous run, a short hash of the new aux for oscillation
 // detection, and any error.
-func runMarkdownPass(l *lua.State, filename, body string, fm Frontmatter, outputFilename, auxPath string, opts Options) (bool, string, error) {
+func runMarkdownPass(l *lua.State, filename, sourceDir, body string, fm Frontmatter, outputFilename, auxPath string, opts Options) (bool, string, error) {
 	luacommon.PushAny(l, any(fm.Extra))
 	l.SetGlobal("_frontmatter")
 
@@ -398,7 +404,7 @@ func runMarkdownPass(l *lua.State, filename, body string, fm Frontmatter, output
 	if err != nil {
 		return false, "", err
 	}
-	return renderHTMLToPDF(l, htmlStr, "", outputFilename, auxPath, fm, opts, true, oldAux)
+	return renderHTMLToPDF(l, htmlStr, sourceDir, outputFilename, auxPath, fm, opts, true, oldAux)
 }
 
 // markdownToHTML converts body to HTML via goldmark. Highlight style
@@ -586,6 +592,11 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 		fe.Doc.Format = document.FormatPDFUA
 	case "PDF/UA-2":
 		fe.Doc.Format = document.FormatPDFUA2
+	case "PDF/A-3b":
+		fe.Doc.Format = document.FormatPDFA3b
+	}
+	if err := applyAttachments(fe, baseDir, fm.Attachments); err != nil {
+		return false, "", fmt.Errorf("%w: applying attachments: %s", errkind.IO, err.Error())
 	}
 	if fm.Lang != "" {
 		fe.Doc.DefaultLanguageTag = fm.Lang
