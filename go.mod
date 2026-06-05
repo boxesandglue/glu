@@ -4,10 +4,10 @@ go 1.24.0
 
 require (
 	github.com/boxesandglue/baseline-pdf v1.1.16
-	github.com/boxesandglue/boxesandglue v0.2.29
+	github.com/boxesandglue/boxesandglue v0.2.30
 	github.com/boxesandglue/csshtml v0.0.12
 	github.com/boxesandglue/hobby v0.0.6
-	github.com/boxesandglue/htmlbag v0.0.27
+	github.com/boxesandglue/htmlbag v0.0.28
 	github.com/boxesandglue/svgreader v0.0.4
 	github.com/boxesandglue/textshape v0.0.12
 	github.com/fsnotify/fsnotify v1.10.1
@@ -25,9 +25,10 @@ require (
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/boxesandglue/gofpdi v1.0.23 // indirect
 	github.com/boxesandglue/mpgo v0.1.6 // indirect
+	github.com/clipperhouse/stringish v0.1.1 // indirect
+	github.com/clipperhouse/uax29/v2 v2.5.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/speedata/barcode v1.1.1 // indirect
 	github.com/speedata/css v1.0.5 // indirect
 	github.com/speedata/goxml v1.0.9 // indirect
