@@ -7,7 +7,7 @@ require (
 	github.com/boxesandglue/boxesandglue v0.2.30
 	github.com/boxesandglue/csshtml v0.0.12
 	github.com/boxesandglue/hobby v0.0.6
-	github.com/boxesandglue/htmlbag v0.0.28
+	github.com/boxesandglue/htmlbag v0.0.29
 	github.com/boxesandglue/svgreader v0.0.4
 	github.com/boxesandglue/textshape v0.0.12
 	github.com/fsnotify/fsnotify v1.10.1
