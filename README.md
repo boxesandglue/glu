@@ -1,6 +1,7 @@
-[![Homepage](https://img.shields.io/badge/homepage-boxesandglue.dev-blue)](https://boxesandglue.dev/glu)
+[![Explore in Constellation](https://img.shields.io/badge/Explore%20in-Constellation-blue)](https://constellation.speedata.de) [![Homepage](https://img.shields.io/badge/homepage-boxesandglue.dev-blue)](https://boxesandglue.dev/glu)
 
 # glu
+
 
 **Markdown to PDF. With typographic precision.**
 
@@ -9,6 +10,7 @@ glu turns Markdown into beautifully typeset PDFs — with real line breaking, hy
 ```bash
 glu document.md        # → document.pdf
 ```
+
 
 ## What makes glu different?
 
@@ -51,6 +53,11 @@ Full documentation: **[boxesandglue.dev/glu](https://boxesandglue.dev/glu)**
 ```bash
 rake build      # creates bin/glu
 ```
+
+## Ecosystem
+
+glu is part of a broader ecosystem of PDF, typesetting and publishing technologies.
+**[Explore the constellation →](https://constellation.speedata.de)**
 
 ## License
 
