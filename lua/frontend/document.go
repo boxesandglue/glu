@@ -460,20 +460,9 @@ func documentIndex(l *lua.State) int {
 		l.PushString(d.Value.Doc.Keywords)
 		return 1
 	case "format":
-		switch d.Value.Doc.Format {
-		case document.FormatPDF:
-			l.PushString("PDF")
-		case document.FormatPDFA3b:
-			l.PushString("PDF/A-3b")
-		case document.FormatPDFX3:
-			l.PushString("PDF/X-3")
-		case document.FormatPDFX4:
-			l.PushString("PDF/X-4")
-		case document.FormatPDFUA:
-			l.PushString("PDF/UA")
-		default:
-			l.PushString("PDF")
-		}
+		// Format.String() yields a comma-separated canonical form that
+		// round-trips through ParseFormat, e.g. "PDF/A-3b, PDF/UA-1".
+		l.PushString(d.Value.Doc.Format.String())
 		return 1
 	// Methods
 	case "finish":
@@ -565,22 +554,13 @@ func documentNewIndex(l *lua.State) int {
 		d.Value.Doc.Keywords = lua.CheckString(l, 3)
 	case "format":
 		formatStr := lua.CheckString(l, 3)
-		switch formatStr {
-		case "PDF":
-			d.Value.Doc.Format = document.FormatPDF
-		case "PDF/A-3b":
-			d.Value.Doc.Format = document.FormatPDFA3b
-		case "PDF/X-3":
-			d.Value.Doc.Format = document.FormatPDFX3
-		case "PDF/X-4":
-			d.Value.Doc.Format = document.FormatPDFX4
-		case "PDF/UA", "PDF/UA-1":
-			d.Value.Doc.Format = document.FormatPDFUA
-		case "PDF/UA-2":
-			d.Value.Doc.Format = document.FormatPDFUA2
-		default:
-			lua.Errorf(l, "unknown format: %s (use PDF, PDF/A-3b, PDF/X-3, PDF/X-4, PDF/UA, PDF/UA-2)", formatStr)
+		// Accept comma-separated combinations: "PDF/A-3b, PDF/UA-1"
+		// declares both sub-conformances on the same document.
+		f, err := document.ParseFormat(formatStr)
+		if err != nil {
+			lua.Errorf(l, "%s", err.Error())
 		}
+		d.Value.Doc.Format = f
 	case "language":
 		lang := checkLanguage(l, 3)
 		d.Value.Doc.DefaultLanguage = lang.Value

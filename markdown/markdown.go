@@ -111,7 +111,7 @@ var outlineDepth = map[string]int{
 // stack size, which prevents a missing-parent panic.
 func appendHeadingOutlines(fe *frontend.Document, headings []htmlbag.HeadingEntry) {
 	var stack []*pdf.Outline
-	ua2 := fe.Doc.Format == document.FormatPDFUA2
+	ua2 := fe.Doc.Format.IsPDFUA2()
 	for _, h := range headings {
 		if h.Page <= 0 || h.Page > len(fe.Doc.Pages) {
 			continue
@@ -587,13 +587,15 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if fm.Author != "" {
 		fe.Doc.Author = fm.Author
 	}
-	switch fm.Format {
-	case "PDF/UA", "PDF/UA-1":
-		fe.Doc.Format = document.FormatPDFUA
-	case "PDF/UA-2":
-		fe.Doc.Format = document.FormatPDFUA2
-	case "PDF/A-3b":
-		fe.Doc.Format = document.FormatPDFA3b
+	if fm.Format != "" {
+		// Frontmatter accepts a comma-separated list:
+		//   format: PDF/A-3b, PDF/UA-1
+		// composes both sub-conformances on the same document.
+		f, err := document.ParseFormat(fm.Format)
+		if err != nil {
+			return false, "", fmt.Errorf("%w: frontmatter format: %s", errkind.Typeset, err.Error())
+		}
+		fe.Doc.Format = f
 	}
 	if err := applyAttachments(fe, baseDir, fm.Attachments); err != nil {
 		return false, "", fmt.Errorf("%w: applying attachments: %s", errkind.IO, err.Error())
