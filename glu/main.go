@@ -147,6 +147,7 @@ func dothings() error {
 	var logFile string
 	var logFormat string = "text"
 	var inputFormat string
+	var pdfFormat string
 	var manifestPath string
 	var sourceDateEpochStr string
 	var watchMode bool
@@ -162,6 +163,7 @@ func dothings() error {
 	op.On("--log-file FILE", "Write log to FILE (default: <output>.log; '-' disables)", &logFile)
 	op.On("--log-format FMT", "Log format: text or json (default: text)", &logFormat)
 	op.On("--input-format FMT", "Force input format for stdin: md, html, or lua", &inputFormat)
+	op.On("--format FMT", "PDF conformance level: PDF/UA, PDF/UA-2, PDF/A-3b, … (frontmatter wins for Markdown)", &pdfFormat)
 	op.On("--manifest FILE", "Write a JSON manifest (pages, passes, headings, duration)", &manifestPath)
 	op.On("--source-date-epoch SECONDS", "Override PDF CreationDate (also honours $SOURCE_DATE_EPOCH)", &sourceDateEpochStr)
 	op.On("-w", "--watch", "Re-render on changes to input, companion .lua, or --css file", &watchMode)
@@ -444,6 +446,7 @@ func dothings() error {
 				ScriptArgs:      scriptArgs,
 				Result:          result,
 				SourceDateEpoch: sourceDateEpoch,
+				Format:          pdfFormat,
 			}
 			if err := markdown.ProcessFile(mainfile, opts); err != nil {
 				return err
@@ -457,6 +460,7 @@ func dothings() error {
 				ScriptArgs:      scriptArgs,
 				Result:          result,
 				SourceDateEpoch: sourceDateEpoch,
+				Format:          pdfFormat,
 			}
 			if err := markdown.ProcessHTMLFile(mainfile, opts); err != nil {
 				return err

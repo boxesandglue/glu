@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	htmlpkg "html"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -530,13 +531,72 @@ func runHTMLPass(l *lua.State, htmlStr, baseDir, outputFilename, auxPath, compan
 	}
 	// HTML mode metadata comes from opts (Title/Lang/Format), not from
 	// front matter; build a synthetic Frontmatter so renderHTMLToPDF
-	// can use one signature for both paths.
+	// can use one signature for both paths. When the caller gave no title,
+	// fall back to the document's <title> element — the natural source for
+	// an HTML document's name and required for PDF/UA (dc:title in XMP).
+	title := opts.Title
+	if title == "" {
+		title = extractHTMLTitle(htmlStr)
+	}
+	// The --format flag wins; otherwise let the HTML declare its own
+	// conformance level via <meta name="pdf-format" content="…">, so a
+	// self-contained document renders correctly with a bare `glu file.html`.
+	format := opts.Format
+	if format == "" {
+		format = extractHTMLMetaFormat(htmlStr)
+	}
 	fm := Frontmatter{
-		Title:  opts.Title,
+		Title:  title,
 		Lang:   opts.Lang,
-		Format: opts.Format,
+		Format: format,
 	}
 	return renderHTMLToPDF(l, htmlStr, baseDir, outputFilename, auxPath, fm, opts, false, oldAux)
+}
+
+// titleElementRE captures the text content of the first <title> element,
+// case-insensitively and across newlines.
+var titleElementRE = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+
+// extractHTMLTitle returns the trimmed text of the document's <title>
+// element, or "" if there is none. Inner markup is stripped and HTML
+// entities are decoded so the result is plain text suitable for the PDF
+// document title.
+func extractHTMLTitle(htmlStr string) string {
+	m := titleElementRE.FindStringSubmatch(htmlStr)
+	if m == nil {
+		return ""
+	}
+	inner := stripTagsRE.ReplaceAllString(m[1], "")
+	return strings.TrimSpace(htmlpkg.UnescapeString(inner))
+}
+
+// stripTagsRE removes any nested element tags from captured title content.
+var stripTagsRE = regexp.MustCompile(`<[^>]*>`)
+
+// Matching <meta> elements with arbitrary attribute order: scan each meta
+// tag, keep the one naming pdf-format, then pull its content. A single
+// ordered regex would miss content-before-name authoring.
+var (
+	metaTagRE     = regexp.MustCompile(`(?is)<meta\b[^>]*>`)
+	metaPDFNameRE = regexp.MustCompile(`(?is)\bname\s*=\s*["']pdf-format["']`)
+	metaContentRE = regexp.MustCompile(`(?is)\bcontent\s*=\s*["']([^"']*)["']`)
+)
+
+// extractHTMLMetaFormat returns the PDF conformance level declared by a
+// <meta name="pdf-format" content="PDF/UA-2"> element, or "" if none. This
+// is the HTML equivalent of the Markdown frontmatter `format:` key, letting a
+// standalone HTML document request its own conformance level without a CLI
+// flag.
+func extractHTMLMetaFormat(htmlStr string) string {
+	for _, tag := range metaTagRE.FindAllString(htmlStr, -1) {
+		if !metaPDFNameRE.MatchString(tag) {
+			continue
+		}
+		if m := metaContentRE.FindStringSubmatch(tag); m != nil {
+			return strings.TrimSpace(htmlpkg.UnescapeString(m[1]))
+		}
+	}
+	return ""
 }
 
 // ProcessHTMLString takes an HTML payload (already in memory), the
@@ -586,6 +646,13 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	}
 	if fm.Author != "" {
 		fe.Doc.Author = fm.Author
+	}
+	// The --format CLI flag is a fallback: frontmatter (Markdown) and the
+	// htmlbag.render options table (Lua) take precedence when they set a
+	// format, but for plain HTML input — which has no frontmatter — the flag
+	// is the only way to request a conformance level.
+	if fm.Format == "" {
+		fm.Format = opts.Format
 	}
 	if fm.Format != "" {
 		// Frontmatter accepts a comma-separated list:
