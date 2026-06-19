@@ -14,6 +14,7 @@ type Frontmatter struct {
 	Papersize   string           `yaml:"papersize"`
 	Format      string           `yaml:"format"`
 	Lang        string           `yaml:"lang"`
+	Math        bool             `yaml:"math"`
 	Attachments []AttachmentSpec `yaml:"attachments"`
 	Extra       map[string]any   `yaml:"-"` // all key-value pairs (including the known ones)
 }

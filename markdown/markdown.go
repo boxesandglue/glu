@@ -30,6 +30,7 @@ import (
 	"github.com/boxesandglue/glu/internal/errkind"
 	luacommon "github.com/boxesandglue/glu/lua/common"
 	luafrontend "github.com/boxesandglue/glu/lua/frontend"
+	"github.com/boxesandglue/glu/markdown/mathext"
 )
 
 // preTrailingNL matches a trailing newline (possibly inside a chroma
@@ -415,15 +416,22 @@ func markdownToHTML(body string, fm Frontmatter) (string, error) {
 	if s, ok := fm.Extra["highlight-style"].(string); ok {
 		highlightStyle = s
 	}
-	gm := goldmark.New(
-		goldmark.WithExtensions(
-			extension.Table,
-			extension.Strikethrough,
-			extension.Linkify,
-			highlighting.NewHighlighting(
-				highlighting.WithStyle(highlightStyle),
-			),
+	extensions := []goldmark.Extender{
+		extension.Table,
+		extension.Strikethrough,
+		extension.Linkify,
+		highlighting.NewHighlighting(
+			highlighting.WithStyle(highlightStyle),
 		),
+	}
+	// Opt-in TeX math: `math: true` in the frontmatter turns on dollar-math
+	// parsing ($…$ inline, $$…$$ display → MathML). It is off by default so a
+	// document that uses $ as a currency sign is never reinterpreted.
+	if fm.Math {
+		extensions = append(extensions, mathext.Math)
+	}
+	gm := goldmark.New(
+		goldmark.WithExtensions(extensions...),
 		// WithAttribute lets a {.class #id key=value} suffix on
 		// headings and block elements turn into HTML attributes —
 		// e.g. "# Title {.right}" → <h1 class="right">. Combined
