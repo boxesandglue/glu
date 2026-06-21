@@ -65,6 +65,16 @@ h1, h2, h3, h4, h5, h6 {
 	break-after: avoid;
 }
 
+/* PDF bookmarks (outline) — Markdown convention: h1 and h2 share the top
+   level (h1 is often the document title, h2 the sections), deeper headings
+   nest one rung per level and start collapsed. h1 keeps htmlbag's default
+   level 1, so only h2+ need an explicit -bag-bookmark level. */
+h2 { -bag-bookmark: 1; }
+h3 { -bag-bookmark: 2 closed; }
+h4 { -bag-bookmark: 3 closed; }
+h5 { -bag-bookmark: 4 closed; }
+h6 { -bag-bookmark: 5 closed; }
+
 p {
 	margin-top: 6pt;
 	margin-bottom: 6pt;

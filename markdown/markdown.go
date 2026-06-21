@@ -15,7 +15,6 @@ import (
 	"text/template"
 	"time"
 
-	pdf "github.com/boxesandglue/baseline-pdf"
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/frontend"
 	"github.com/boxesandglue/csshtml"
@@ -88,67 +87,6 @@ func readAuxGlobal(l *lua.State) map[string]any {
 		}
 	}
 	return make(map[string]any)
-}
-
-// outlineDepth maps an HTML heading level to its position in the PDF
-// outline tree. h1 and h2 share the top level; every level below sits
-// one rung deeper than the previous one. The mapping is `max(0, n-2)`
-// for hN (so h3=1, h4=2, …). Unknown levels collapse to top-level.
-var outlineDepth = map[string]int{
-	"h1": 0,
-	"h2": 0,
-	"h3": 1,
-	"h4": 2,
-	"h5": 3,
-	"h6": 4,
-}
-
-// appendHeadingOutlines builds a nested PDF outline tree from the
-// heading list collected during VList construction. h1/h2 form the
-// top level (Open: true → their children show expanded in the
-// reader), h3+ nest by depth and stay collapsed (Open: false). A
-// stack tracks the most recent outline at each depth so siblings and
-// children attach correctly. Heading-level jumps (e.g. h2 → h4 with
-// no h3 between) are absorbed by clamping the depth to the current
-// stack size, which prevents a missing-parent panic.
-func appendHeadingOutlines(fe *frontend.Document, headings []htmlbag.HeadingEntry) {
-	var stack []*pdf.Outline
-	ua2 := fe.Doc.Format.IsPDFUA2()
-	for _, h := range headings {
-		if h.Page <= 0 || h.Page > len(fe.Doc.Pages) {
-			continue
-		}
-		var dest string
-		if ua2 && h.SE != nil {
-			// PDF/UA-2 §8.8: intra-document destinations must be
-			// structure destinations. Pre-allocate the SE object now
-			// so Finish() reuses it instead of allocating a new one;
-			// the outline /Dest then targets the StructElem directly.
-			if h.SE.Obj == nil {
-				h.SE.Obj = fe.Doc.PDFWriter.NewObject()
-			}
-			dest = fmt.Sprintf("[%s /Fit]", h.SE.Obj.ObjectNumber.Ref())
-		} else {
-			pg := fe.Doc.Pages[h.Page-1]
-			dest = fmt.Sprintf("[%s /Fit]", pg.Objectnumber.Ref())
-		}
-
-		depth := min(outlineDepth[h.Level], len(stack))
-
-		o := &pdf.Outline{
-			Title: h.Text,
-			Dest:  dest,
-			Open:  depth == 0,
-		}
-
-		if depth == 0 {
-			fe.Doc.PDFWriter.Outlines = append(fe.Doc.PDFWriter.Outlines, o)
-		} else {
-			parent := stack[depth-1]
-			parent.Children = append(parent.Children, o)
-		}
-		stack = append(stack[:depth], o)
-	}
 }
 
 // Result holds post-run statistics from ProcessFile / ProcessHTMLFile.
@@ -693,6 +631,9 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if err != nil {
 		return false, "", fmt.Errorf("%w: creating CSS builder: %s", errkind.Typeset, err.Error())
 	}
+	// PDF bookmarks are emitted automatically by htmlbag. The default
+	// Markdown stylesheet maps the heading levels with -bag-bookmark so the
+	// outline keeps glu's convention (h1 and h2 share the top level).
 	if pages, ok := oldAux["_pages"].(float64); ok {
 		cb.Counters["pages"] = int(pages)
 	}
@@ -764,10 +705,6 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	}
 	if err := cb.OutputPagesFromText(te); err != nil {
 		return false, "", fmt.Errorf("%w: outputting pages: %s", errkind.Typeset, err.Error())
-	}
-
-	if len(cb.Headings) > 0 {
-		appendHeadingOutlines(fe, cb.Headings)
 	}
 
 	if err := fe.Finish(); err != nil {
