@@ -164,3 +164,28 @@ func TestPrimeShorthand(t *testing.T) {
 		}
 	}
 }
+
+// TestDisplayLimitOperators — display math stacks scripts of movable-limit
+// operators via munderover; inline keeps side scripts; integrals keep side
+// scripts in both modes (TeX nolimits).
+func TestDisplayLimitOperators(t *testing.T) {
+	testdata := []struct {
+		in      string
+		display bool
+		want    string
+	}{
+		{`\sum_{i=1}^{n}`, true, "<math display=\"block\"><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover></math>"},
+		{`\sum_{i=1}^{n}`, false, "<math><msubsup><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup></math>"},
+		{`\int_a^b`, true, "<math display=\"block\"><msubsup><mo>∫</mo><mi>a</mi><mi>b</mi></msubsup></math>"},
+		{`\lim_{x \to 0}`, true, "<math display=\"block\"><munder><mo>lim</mo><mrow><mi>x</mi><mo>→</mo><mn>0</mn></mrow></munder></math>"},
+	}
+	for _, td := range testdata {
+		got, err := ToMathML(td.in, td.display)
+		if err != nil {
+			t.Fatalf("ToMathML(%q): %v", td.in, err)
+		}
+		if got != td.want {
+			t.Errorf("ToMathML(%q, display=%v) =\n%s, want\n%s", td.in, td.display, got, td.want)
+		}
+	}
+}

@@ -26,7 +26,7 @@ import (
 // laid out inline. The returned string always has a single <math> root, so it
 // drops straight into HTML where htmlbag picks it up as a formula.
 func ToMathML(tex string, display bool) (string, error) {
-	p := &parser{src: []rune(tex)}
+	p := &parser{src: []rune(tex), display: display}
 	items, err := p.parseList(true)
 	if err != nil {
 		return "", err
@@ -51,6 +51,10 @@ func ToMathML(tex string, display bool) (string, error) {
 type parser struct {
 	src []rune
 	pos int
+	// display records whether the formula is display math; limit
+	// operators then take stacked scripts (munderover) instead of side
+	// scripts, mirroring TeX's movablelimits behavior.
+	display bool
 }
 
 func (p *parser) atEnd() bool { return p.pos >= len(p.src) }
@@ -153,6 +157,21 @@ func (p *parser) parseScripts(base string) (string, error) {
 			sup = "<mrow>" + pr + sup + "</mrow>"
 		}
 	}
+	// Display-style limit operators (∑, lim, …) stack their scripts
+	// above/below via munderover; TeX calls this movablelimits. Inline
+	// they keep side scripts. Integrals are deliberately not in the set:
+	// TeX treats \int as nolimits, so msubsup side scripts are correct
+	// in both modes.
+	if p.display && limitBases[base] {
+		switch {
+		case sub != "" && sup != "":
+			return "<munderover>" + base + sub + sup + "</munderover>", nil
+		case sup != "":
+			return "<mover>" + base + sup + "</mover>", nil
+		case sub != "":
+			return "<munder>" + base + sub + "</munder>", nil
+		}
+	}
 	switch {
 	case sub != "" && sup != "":
 		return "<msubsup>" + base + sub + sup + "</msubsup>", nil
@@ -163,6 +182,28 @@ func (p *parser) parseScripts(base string) (string, error) {
 	default:
 		return base, nil
 	}
+}
+
+// limitBases is the set of operator atoms that take movable limits: their
+// scripts stack in display style. Keyed by the emitted MathML so brace
+// groups and macros compare equal.
+var limitBases = map[string]bool{
+	"<mo>∑</mo>":            true,
+	"<mo>∏</mo>":            true,
+	"<mo>∐</mo>":            true,
+	"<mo>⋃</mo>":            true,
+	"<mo>⋂</mo>":            true,
+	"<mo>⋁</mo>":            true,
+	"<mo>⋀</mo>":            true,
+	"<mo>⨁</mo>":            true,
+	"<mo>⨂</mo>":            true,
+	"<mo>lim</mo>":          true,
+	"<mo>lim\u2009sup</mo>": true,
+	"<mo>lim\u2009inf</mo>": true,
+	"<mo>max</mo>":          true,
+	"<mo>min</mo>":          true,
+	"<mo>sup</mo>":          true,
+	"<mo>inf</mo>":          true,
 }
 
 // parseScriptArg reads the single atom that a ^ or _ applies to: either a
