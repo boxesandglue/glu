@@ -114,9 +114,17 @@ func (p *parser) parseList(topLevel bool) ([]string, error) {
 // single <msubsup>, which is what TeX does too.
 func (p *parser) parseScripts(base string) (string, error) {
 	var sub, sup string
+	primes := 0
 	for {
 		p.skipSpace()
 		c := p.peek()
+		if c == '\'' {
+			// TeX prime shorthand: f' is f^{\prime}, f'' doubles it, and
+			// f'^2 merges into one superscript (f^{\prime 2}).
+			p.next()
+			primes++
+			continue
+		}
 		if c != '^' && c != '_' {
 			break
 		}
@@ -135,6 +143,14 @@ func (p *parser) parseScripts(base string) (string, error) {
 				return "", fmt.Errorf("double subscript")
 			}
 			sub = arg
+		}
+	}
+	if primes > 0 {
+		pr := "<mo>" + primeRun(primes) + "</mo>"
+		if sup == "" {
+			sup = pr
+		} else {
+			sup = "<mrow>" + pr + sup + "</mrow>"
 		}
 	}
 	switch {
@@ -431,4 +447,21 @@ func escapeXML(s string) string {
 		"'", "&apos;",
 	)
 	return r.Replace(s)
+}
+
+// primeRun returns the Unicode character for a run of n TeX prime marks:
+// the dedicated double/triple/quadruple prime characters when they exist,
+// a repetition of U+2032 beyond that.
+func primeRun(n int) string {
+	switch n {
+	case 1:
+		return "′"
+	case 2:
+		return "″"
+	case 3:
+		return "‴"
+	case 4:
+		return "⁗"
+	}
+	return strings.Repeat("′", n)
 }

@@ -116,14 +116,51 @@ func TestToMathML(t *testing.T) {
 
 func TestToMathMLErrors(t *testing.T) {
 	cases := []string{
-		"{a",       // unclosed brace
-		"a}",       // stray close brace
+		"{a",        // unclosed brace
+		"a}",        // stray close brace
 		"\\frac{a}", // missing second fraction argument
-		"x^2^3",    // double superscript
+		"x^2^3",     // double superscript
 	}
 	for _, tc := range cases {
 		if _, err := ToMathML(tc, false); err == nil {
 			t.Errorf("ToMathML(%q): expected error, got nil", tc)
+		}
+	}
+}
+
+func TestFloorCeilDelimiters(t *testing.T) {
+	testdata := []struct{ in, want string }{
+		{`\lfloor x \rfloor`, "<math><mrow><mo>⌊</mo><mi>x</mi><mo>⌋</mo></mrow></math>"},
+		{`\lceil x \rceil`, "<math><mrow><mo>⌈</mo><mi>x</mi><mo>⌉</mo></mrow></math>"},
+		{`\langle a \rangle`, "<math><mrow><mo>⟨</mo><mi>a</mi><mo>⟩</mo></mrow></math>"},
+	}
+	for _, td := range testdata {
+		got, err := ToMathML(td.in, false)
+		if err != nil {
+			t.Fatalf("ToMathML(%q): %v", td.in, err)
+		}
+		if got != td.want {
+			t.Errorf("ToMathML(%q) = %s, want %s", td.in, got, td.want)
+		}
+	}
+}
+
+func TestPrimeShorthand(t *testing.T) {
+	testdata := []struct{ in, want string }{
+		{`f'`, "<math><msup><mi>f</mi><mo>′</mo></msup></math>"},
+		{`f''`, "<math><msup><mi>f</mi><mo>″</mo></msup></math>"},
+		{`f'''`, "<math><msup><mi>f</mi><mo>‴</mo></msup></math>"},
+		{`f'(x)`, "<math><mrow><msup><mi>f</mi><mo>′</mo></msup><mo>(</mo><mi>x</mi><mo>)</mo></mrow></math>"},
+		{`f'^2`, "<math><msup><mi>f</mi><mrow><mo>′</mo><mn>2</mn></mrow></msup></math>"},
+		{`a_i'`, "<math><msubsup><mi>a</mi><mi>i</mi><mo>′</mo></msubsup></math>"},
+	}
+	for _, td := range testdata {
+		got, err := ToMathML(td.in, false)
+		if err != nil {
+			t.Fatalf("ToMathML(%q): %v", td.in, err)
+		}
+		if got != td.want {
+			t.Errorf("ToMathML(%q) = %s, want %s", td.in, got, td.want)
 		}
 	}
 }
