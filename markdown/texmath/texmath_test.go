@@ -147,12 +147,12 @@ func TestFloorCeilDelimiters(t *testing.T) {
 
 func TestPrimeShorthand(t *testing.T) {
 	testdata := []struct{ in, want string }{
-		{`f'`, "<math><msup><mi>f</mi><mo>′</mo></msup></math>"},
-		{`f''`, "<math><msup><mi>f</mi><mo>″</mo></msup></math>"},
-		{`f'''`, "<math><msup><mi>f</mi><mo>‴</mo></msup></math>"},
-		{`f'(x)`, "<math><mrow><msup><mi>f</mi><mo>′</mo></msup><mo>(</mo><mi>x</mi><mo>)</mo></mrow></math>"},
-		{`f'^2`, "<math><msup><mi>f</mi><mrow><mo>′</mo><mn>2</mn></mrow></msup></math>"},
-		{`a_i'`, "<math><msubsup><mi>a</mi><mi>i</mi><mo>′</mo></msubsup></math>"},
+		{`f'`, "<math><mi>f</mi><mo>′</mo></math>"},
+		{`f''`, "<math><mi>f</mi><mo>″</mo></math>"},
+		{`f'''`, "<math><mi>f</mi><mo>‴</mo></math>"},
+		{`f'(x)`, "<math><mrow><mi>f</mi><mo>′</mo><mo>(</mo><mi>x</mi><mo>)</mo></mrow></math>"},
+		{`f'^2`, "<math><msup><mrow><mi>f</mi><mo>′</mo></mrow><mn>2</mn></msup></math>"},
+		{`a_i'`, "<math><msub><mi>a</mi><mi>i</mi></msub><mo>′</mo></math>"},
 	}
 	for _, td := range testdata {
 		got, err := ToMathML(td.in, false)

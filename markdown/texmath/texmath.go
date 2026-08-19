@@ -150,12 +150,21 @@ func (p *parser) parseScripts(base string) (string, error) {
 		}
 	}
 	if primes > 0 {
+		// Primes are designed as raised glyphs in OpenType math fonts
+		// (they sit above the x-height at text size), so they are set as
+		// ord atoms directly after the base without any script
+		// treatment. Never wrap them in msup: that would scale and raise
+		// them a second time.
 		pr := "<mo>" + primeRun(primes) + "</mo>"
 		if sup == "" {
-			sup = pr
-		} else {
-			sup = "<mrow>" + pr + sup + "</mrow>"
+			if sub != "" {
+				return "<msub>" + base + sub + "</msub>" + pr, nil
+			}
+			return base + pr, nil
 		}
+		// An explicit superscript after primes (TeX's f'^2) attaches to
+		// the primed group so it lands to the right of the prime marks.
+		base = "<mrow>" + base + pr + "</mrow>"
 	}
 	// Display-style limit operators (∑, lim, …) stack their scripts
 	// above/below via munderover; TeX calls this movablelimits. Inline
