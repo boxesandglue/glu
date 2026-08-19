@@ -335,9 +335,13 @@ func (p *parser) parseMacro() (string, error) {
 			return "", err
 		}
 		return "<msqrt>" + rad + "</msqrt>", nil
-	case "left", "right", "bigl", "bigr", "Bigl", "Bigr":
-		// Delimiter sizing is ignored in this subset; emit the following
-		// delimiter as a plain operator. \left. / \right. are invisible.
+	case "left":
+		return p.parseFenced()
+	case "right":
+		return "", fmt.Errorf("\\right without matching \\left")
+	case "bigl", "bigr", "Bigl", "Bigr":
+		// Manual delimiter sizing is ignored in this subset; emit the
+		// following delimiter as a plain operator.
 		p.skipSpace()
 		if p.atEnd() {
 			return "", nil
@@ -347,7 +351,7 @@ func (p *parser) parseMacro() (string, error) {
 			return "", nil
 		}
 		if d == '\\' {
-			// e.g. \left\{ — re-read as a macro delimiter.
+			// e.g. \bigl\{ — re-read as a macro delimiter.
 			p.pos-- // step back onto backslash
 			return p.parseMacro()
 		}
@@ -505,4 +509,138 @@ func primeRun(n int) string {
 		return "⁗"
 	}
 	return strings.Repeat("′", n)
+}
+
+// delimMacros maps delimiter macro names (usable after \left and \right)
+// to their characters.
+var delimMacros = map[string]string{
+	"lfloor":      "⌊",
+	"rfloor":      "⌋",
+	"lceil":       "⌈",
+	"rceil":       "⌉",
+	"langle":      "⟨",
+	"rangle":      "⟩",
+	"vert":        "|",
+	"lvert":       "|",
+	"rvert":       "|",
+	"Vert":        "‖",
+	"lVert":       "‖",
+	"rVert":       "‖",
+	"lbrace":      "{",
+	"rbrace":      "}",
+	"backslash":   "\\",
+	"uparrow":     "↑",
+	"downarrow":   "↓",
+	"updownarrow": "↕",
+}
+
+// parseDelimiterToken reads the delimiter that follows \left or \right:
+// '.' for an invisible delimiter (returned as ""), a single character, or
+// a delimiter macro such as \lfloor.
+func (p *parser) parseDelimiterToken() (string, error) {
+	p.skipSpace()
+	if p.atEnd() {
+		return "", fmt.Errorf("missing delimiter after \\left or \\right")
+	}
+	c := p.next()
+	if c == '.' {
+		return "", nil
+	}
+	if c != '\\' {
+		return string(c), nil
+	}
+	if p.atEnd() {
+		return "", fmt.Errorf("trailing backslash after \\left or \\right")
+	}
+	if !isLetter(p.peek()) {
+		// Escaped single-char delimiters: \{ \} \|
+		d := p.next()
+		if d == '|' {
+			return "‖", nil
+		}
+		return string(d), nil
+	}
+	start := p.pos
+	for !p.atEnd() && isLetter(p.peek()) {
+		p.next()
+	}
+	name := string(p.src[start:p.pos])
+	if d, ok := delimMacros[name]; ok {
+		return d, nil
+	}
+	return "", fmt.Errorf("unknown delimiter \\%s", name)
+}
+
+// tryMacro reports whether the next token is exactly the macro \name and
+// consumes it on a match; otherwise the read position is unchanged. Longer
+// names sharing the prefix (\rightarrow vs. \right) do not match because
+// the letter run is read greedily.
+func (p *parser) tryMacro(name string) bool {
+	save := p.pos
+	if p.atEnd() || p.peek() != '\\' {
+		return false
+	}
+	p.next()
+	start := p.pos
+	for !p.atEnd() && isLetter(p.peek()) {
+		p.next()
+	}
+	if string(p.src[start:p.pos]) == name {
+		return true
+	}
+	p.pos = save
+	return false
+}
+
+// parseFenced parses \left <delim> body \right <delim> into an mrow whose
+// visible delimiters are stretchy fence operators — the form the MathML
+// reader rewrites into a Fenced engine item, so they stretch to the
+// enclosed content. Nested \left…\right recurses through parseAtomBase.
+func (p *parser) parseFenced() (string, error) {
+	open, err := p.parseDelimiterToken()
+	if err != nil {
+		return "", err
+	}
+	var body []string
+	for {
+		p.skipSpace()
+		if p.atEnd() {
+			return "", fmt.Errorf("missing \\right")
+		}
+		if p.peek() == '}' {
+			return "", fmt.Errorf("missing \\right before }")
+		}
+		if p.tryMacro("right") {
+			break
+		}
+		base, err := p.parseAtomBase()
+		if err != nil {
+			return "", err
+		}
+		if base == "" {
+			continue
+		}
+		base, err = p.parseScripts(base)
+		if err != nil {
+			return "", err
+		}
+		body = append(body, base)
+	}
+	closing, err := p.parseDelimiterToken()
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	b.WriteString("<mrow>")
+	if open != "" {
+		b.WriteString(`<mo fence="true" stretchy="true">` + escapeXML(open) + `</mo>`)
+	}
+	for _, item := range body {
+		b.WriteString(item)
+	}
+	if closing != "" {
+		b.WriteString(`<mo fence="true" stretchy="true">` + escapeXML(closing) + `</mo>`)
+	}
+	b.WriteString("</mrow>")
+	return b.String(), nil
 }

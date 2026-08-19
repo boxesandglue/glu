@@ -189,3 +189,41 @@ func TestDisplayLimitOperators(t *testing.T) {
 		}
 	}
 }
+
+// TestLeftRightFences — \left…\right groups become an mrow with stretchy
+// fence operators, including macro delimiters, invisible dots, script
+// attachment on the whole group, and error cases.
+func TestLeftRightFences(t *testing.T) {
+	good := []struct{ in, want string }{
+		{`\left( \frac{a}{b} \right)`,
+			`<math><mrow><mo fence="true" stretchy="true">(</mo><mfrac><mi>a</mi><mi>b</mi></mfrac><mo fence="true" stretchy="true">)</mo></mrow></math>`},
+		{`\left\lfloor x \right\rfloor`,
+			`<math><mrow><mo fence="true" stretchy="true">⌊</mo><mi>x</mi><mo fence="true" stretchy="true">⌋</mo></mrow></math>`},
+		{`\left. x \right|`,
+			`<math><mrow><mi>x</mi><mo fence="true" stretchy="true">|</mo></mrow></math>`},
+		{`\left( x \right)^2`,
+			`<math><msup><mrow><mo fence="true" stretchy="true">(</mo><mi>x</mi><mo fence="true" stretchy="true">)</mo></mrow><mn>2</mn></msup></math>`},
+		{`\left(\left( x \right)\right)`,
+			`<math><mrow><mo fence="true" stretchy="true">(</mo><mrow><mo fence="true" stretchy="true">(</mo><mi>x</mi><mo fence="true" stretchy="true">)</mo></mrow><mo fence="true" stretchy="true">)</mo></mrow></math>`},
+	}
+	for _, td := range good {
+		got, err := ToMathML(td.in, false)
+		if err != nil {
+			t.Fatalf("ToMathML(%q): %v", td.in, err)
+		}
+		if got != td.want {
+			t.Errorf("ToMathML(%q) =\n%s, want\n%s", td.in, got, td.want)
+		}
+	}
+
+	bad := []string{
+		`a \right)`,
+		`\left( x`,
+		`\frac{\left( x}{2}`,
+	}
+	for _, in := range bad {
+		if _, err := ToMathML(in, false); err == nil {
+			t.Errorf("ToMathML(%q): expected error, got none", in)
+		}
+	}
+}
