@@ -3,13 +3,13 @@ module github.com/boxesandglue/glu
 go 1.25.0
 
 require (
-	github.com/boxesandglue/baseline-pdf v1.1.18
-	github.com/boxesandglue/boxesandglue v0.2.38
+	github.com/boxesandglue/baseline-pdf v1.1.20
+	github.com/boxesandglue/boxesandglue v0.2.40
 	github.com/boxesandglue/csshtml v0.0.14
 	github.com/boxesandglue/hobby v0.0.6
-	github.com/boxesandglue/htmlbag v0.0.37
+	github.com/boxesandglue/htmlbag v0.0.38
 	github.com/boxesandglue/svgreader v0.0.4
-	github.com/boxesandglue/textshape v0.0.13
+	github.com/boxesandglue/textshape v0.0.15
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/speedata/cxpath v0.0.9
 	github.com/speedata/go-lua v0.1.10
@@ -25,8 +25,7 @@ require (
 	github.com/andybalholm/cascadia v1.3.4 // indirect
 	github.com/boxesandglue/gofpdi v1.0.24 // indirect
 	github.com/boxesandglue/mpgo v0.1.6 // indirect
-	github.com/clipperhouse/stringish v0.1.1 // indirect
-	github.com/clipperhouse/uax29/v2 v2.5.0 // indirect
+	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/speedata/barcode v1.1.1 // indirect
