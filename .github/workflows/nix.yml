@@ -1,0 +1,21 @@
+name: Nix
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+
+      # Catches a stale vendorHash after go.mod/go.sum changes: the
+      # build then fails with a hash mismatch that names the new hash.
+      - name: Build glu via flake
+        run: nix build
+
+      - name: Sanity-check binary
+        run: ./result/bin/glu --version
