@@ -70,7 +70,9 @@ forwarded — see *MULTI-CALL BINARY*.
 
 *--css* _FILE_
 	Additional CSS file loaded after defaultCSS and any front-matter
-	CSS reference.
+	CSS reference. Resolved against the process working directory
+	(the front-matter *css:* reference, in contrast, resolves
+	relative to the document).
 
 *--clean*
 	Remove _<output>-aux.json_ before the first pass. Useful when an
@@ -92,7 +94,7 @@ forwarded — see *MULTI-CALL BINARY*.
 	set is computed once at startup and contains: the input file,
 	the companion _<stem>.lua_ (if present), the *--css* argument,
 	and the *css:* field from the Markdown frontmatter (resolved
-	cwd-relative first, then relative to the input directory).
+	relative to the input document, like the render path).
 	Editing the frontmatter *css:* value to a different filename
 	mid-session does not re-scan the watch set — restart *glu* in
 	that case.
@@ -161,7 +163,7 @@ Markdown mode reads YAML front matter between two *---* lines:
 |  author
 :  document /Author
 |  css
-:  extra CSS file path
+:  extra CSS file path, resolved relative to the document
 |  papersize
 :  e.g. *a4*, *letter*
 |  format

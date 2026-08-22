@@ -454,6 +454,16 @@ func ProcessHTMLFile(filename string, opts Options) error {
 	return fmt.Errorf("aux file did not converge after %d passes: %w", maxPasses, errkind.AuxNotConverged)
 }
 
+// ResolveFrontmatterCSS resolves a front-matter css: reference.
+// Relative paths resolve against the document's directory, like
+// <link href> in HTML, url() inside a stylesheet, and the
+// attachments: front-matter list; absolute paths pass through
+// unchanged. glu --watch uses the same resolution (see
+// frontmatterCSS in the CLI). (glu#3)
+func ResolveFrontmatterCSS(baseDir, cssPath string) string {
+	return resolveSourcePath(baseDir, cssPath)
+}
+
 // runHTMLPass executes one HTML→PDF pass on the supplied state. If
 // companionLuaFilename is non-empty, its sibling <stem>.lua is loaded
 // before firing document_start. ProcessHTMLString passes "" to skip
@@ -679,8 +689,9 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 			}
 		}
 		if fm.CSS != "" {
-			if err := cb.ReadCSSFile(fm.CSS); err != nil {
-				return false, "", fmt.Errorf("%w: reading CSS file %s: %s", errkind.IO, fm.CSS, err.Error())
+			cssPath := ResolveFrontmatterCSS(baseDir, fm.CSS)
+			if err := cb.ReadCSSFile(cssPath); err != nil {
+				return false, "", fmt.Errorf("%w: reading CSS file %s: %s", errkind.IO, cssPath, err.Error())
 			}
 		}
 	}

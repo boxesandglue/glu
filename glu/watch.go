@@ -48,10 +48,10 @@ func watchPaths(input, cssFlag string) []string {
 // frontmatterCSS reads the input file (Markdown only) and returns
 // the resolved path to the `css:` frontmatter entry, or "" if the
 // input is not Markdown, has no frontmatter, the entry is missing,
-// or the referenced file does not exist on disk. The path is
-// resolved by trying cwd-relative first (matching cb.ReadCSSFile's
-// behaviour in the Markdown render path) and falling back to
-// input-directory-relative.
+// or the referenced file does not exist on disk. Resolution is
+// delegated to markdown.ResolveFrontmatterCSS so the watch set
+// matches the render path: relative paths resolve against the
+// document's directory.
 func frontmatterCSS(input string) string {
 	if ext := filepath.Ext(input); ext != ".md" {
 		return ""
@@ -64,18 +64,9 @@ func frontmatterCSS(input string) string {
 	if fm.CSS == "" {
 		return ""
 	}
-	if filepath.IsAbs(fm.CSS) {
-		if _, err := os.Stat(fm.CSS); err == nil {
-			return fm.CSS
-		}
-		return ""
-	}
-	if _, err := os.Stat(fm.CSS); err == nil {
-		return fm.CSS
-	}
-	rel := filepath.Join(filepath.Dir(input), fm.CSS)
-	if _, err := os.Stat(rel); err == nil {
-		return rel
+	resolved := markdown.ResolveFrontmatterCSS(filepath.Dir(input), fm.CSS)
+	if _, err := os.Stat(resolved); err == nil {
+		return resolved
 	}
 	return ""
 }
