@@ -567,8 +567,9 @@ func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, op
 // paths. The caller has already loaded the companion Lua file, fired
 // document_start / content_ready, and (for Markdown) run any {lua}
 // blocks. useDefaultCSS=true loads the built-in Markdown stylesheet
-// and applies front-matter papersize / css before InitPage(); HTML
-// mode lets <style>/<link> in the document drive @page setup.
+// and applies front-matter papersize / css; in both modes the
+// document's own <style>/<link> layers on top and the page is
+// initialised lazily so inline @page rules take effect.
 func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath string, fm Frontmatter, opts Options, useDefaultCSS bool, oldAux map[string]any) (bool, string, error) {
 	fe, err := frontend.New(outputFilename)
 	if err != nil {
@@ -689,16 +690,12 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 		}
 	}
 
-	// Markdown path explicitly initialises the page before
-	// HTMLToText runs because its default CSS already declares
-	// @page. HTML mode relies on HTMLToText to discover @page from
-	// the document's own <style>/<link>, so we skip InitPage there.
-	if useDefaultCSS {
-		if err := cb.InitPage(); err != nil {
-			return false, "", fmt.Errorf("%w: initializing page: %s", errkind.Typeset, err.Error())
-		}
-	}
-
+	// No explicit InitPage here: HTMLToText parses the document's
+	// <style>/<link> blocks, so @page rules from inline styles must be
+	// known before the first page is created. The page is initialised
+	// lazily (OutputPagesFromText, or a PageSize prime during the HTML
+	// walk), with inline @page layering above the built-in default
+	// stylesheet, front matter and --css. See glu#1.
 	te, err := cb.HTMLToText(htmlStr)
 	if err != nil {
 		return false, "", fmt.Errorf("%w: HTML to text: %s", errkind.Typeset, err.Error())
