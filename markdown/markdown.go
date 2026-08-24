@@ -20,6 +20,7 @@ import (
 	"github.com/boxesandglue/csshtml"
 	"github.com/boxesandglue/htmlbag"
 	"github.com/speedata/go-lua"
+	attributes "github.com/mdigger/goldmark-attributes"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
@@ -358,6 +359,15 @@ func markdownToHTML(body string, fm Frontmatter) (string, error) {
 		extension.Table,
 		extension.Strikethrough,
 		extension.Linkify,
+		// Block attributes in kramdown style: a {.class #id key=value}
+		// line directly after a block (no blank line in between)
+		// attaches to that block, e.g.
+		//   A paragraph.
+		//   {.initial}
+		// becomes <p class="initial">. Works for every block type;
+		// inline spans are not supported. ATX headings keep their
+		// suffix syntax via parser.WithAttribute below.
+		attributes.Extension,
 		highlighting.NewHighlighting(
 			highlighting.WithStyle(highlightStyle),
 		),
@@ -370,13 +380,13 @@ func markdownToHTML(body string, fm Frontmatter) (string, error) {
 	}
 	gm := goldmark.New(
 		goldmark.WithExtensions(extensions...),
-		// WithAttribute lets a {.class #id key=value} suffix on
-		// headings and block elements turn into HTML attributes —
-		// e.g. "# Title {.right}" → <h1 class="right">. Combined
-		// with the .left / .right / .center / .justify utility
-		// classes shipped in defaultCSS this is how the Markdown
-		// frontend exposes paragraph alignment, which CommonMark
-		// itself does not have a syntax for.
+		// WithAttribute lets a {.class #id key=value} suffix on ATX
+		// headings turn into HTML attributes, e.g. "# Title {.right}"
+		// → <h1 class="right">. Despite the goldmark docs saying
+		// "block elements", v1.7.16 implements this for headings
+		// only; every other block type is covered by the
+		// attributes.Extension above (attribute line after the
+		// block).
 		goldmark.WithParserOptions(parser.WithAttribute()),
 		goldmark.WithRendererOptions(
 			goldmarkhtml.WithUnsafe(),

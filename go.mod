@@ -11,6 +11,7 @@ require (
 	github.com/boxesandglue/svgreader v0.0.4
 	github.com/boxesandglue/textshape v0.0.15
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/mdigger/goldmark-attributes v0.0.0-20250724115859-bd3108091530
 	github.com/speedata/cxpath v0.0.9
 	github.com/speedata/go-lua v0.1.10
 	github.com/speedata/optionparser v1.2.1
