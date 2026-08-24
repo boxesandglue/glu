@@ -344,7 +344,7 @@ func runMarkdownPass(l *lua.State, filename, sourceDir, body string, fm Frontmat
 	if err != nil {
 		return false, "", err
 	}
-	return renderHTMLToPDF(l, htmlStr, sourceDir, outputFilename, auxPath, fm, opts, true, oldAux)
+	return renderHTMLToPDF(l, htmlStr, sourceDir, outputFilename, auxPath, fm, opts, markdownOutlineCSS, oldAux)
 }
 
 // markdownToHTML converts body to HTML via goldmark. Highlight style
@@ -506,7 +506,7 @@ func runHTMLPass(l *lua.State, htmlStr, baseDir, outputFilename, auxPath, compan
 		Lang:   opts.Lang,
 		Format: format,
 	}
-	return renderHTMLToPDF(l, htmlStr, baseDir, outputFilename, auxPath, fm, opts, false, oldAux)
+	return renderHTMLToPDF(l, htmlStr, baseDir, outputFilename, auxPath, fm, opts, "", oldAux)
 }
 
 // titleElementRE captures the text content of the first <title> element,
@@ -576,11 +576,13 @@ func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, op
 // renderHTMLToPDF is the shared core for both Markdown and HTML
 // paths. The caller has already loaded the companion Lua file, fired
 // document_start / content_ready, and (for Markdown) run any {lua}
-// blocks. useDefaultCSS=true loads the built-in Markdown stylesheet
-// and applies front-matter papersize / css; in both modes the
-// document's own <style>/<link> layers on top and the page is
-// initialised lazily so inline @page rules take effect.
-func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath string, fm Frontmatter, opts Options, useDefaultCSS bool, oldAux map[string]any) (bool, string, error) {
+// blocks. Both paths share the built-in default stylesheet
+// (defaultcss.go) plus front-matter papersize / css; the document's
+// own <style>/<link> layers on top and the page is initialised
+// lazily so inline @page rules take effect. extraCSS is loaded
+// between the default stylesheet and the author layers; the Markdown
+// path passes markdownOutlineCSS, the HTML path passes "".
+func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath string, fm Frontmatter, opts Options, extraCSS string, oldAux map[string]any) (bool, string, error) {
 	fe, err := frontend.New(outputFilename)
 	if err != nil {
 		return false, "", fmt.Errorf("%w: creating document: %s", errkind.Typeset, err.Error())
@@ -642,9 +644,9 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if err != nil {
 		return false, "", fmt.Errorf("%w: creating CSS builder: %s", errkind.Typeset, err.Error())
 	}
-	// PDF bookmarks are emitted automatically by htmlbag. The default
-	// Markdown stylesheet maps the heading levels with -bag-bookmark so the
-	// outline keeps glu's convention (h1 and h2 share the top level).
+	// PDF bookmarks are emitted automatically by htmlbag. In Markdown mode
+	// markdownOutlineCSS maps the heading levels with -bag-bookmark (h1 and
+	// h2 share the top level); HTML mode keeps htmlbag's 1:1 nesting.
 	if pages, ok := oldAux["_pages"].(float64); ok {
 		cb.Counters["pages"] = int(pages)
 	}
@@ -678,21 +680,24 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 		cr.InstallPageInit()
 	}
 
-	if useDefaultCSS {
-		if err := cb.AddCSS(defaultCSS); err != nil {
-			return false, "", fmt.Errorf("%w: adding default CSS: %s", errkind.Typeset, err.Error())
+	if err := cb.AddCSS(defaultCSS); err != nil {
+		return false, "", fmt.Errorf("%w: adding default CSS: %s", errkind.Typeset, err.Error())
+	}
+	if extraCSS != "" {
+		if err := cb.AddCSS(extraCSS); err != nil {
+			return false, "", fmt.Errorf("%w: adding mode-specific CSS: %s", errkind.Typeset, err.Error())
 		}
-		if fm.Papersize != "" {
-			pageSizeCSS := fmt.Sprintf("@page { size: %s; }", fm.Papersize)
-			if err := cb.AddCSS(pageSizeCSS); err != nil {
-				return false, "", fmt.Errorf("%w: applying papersize: %s", errkind.Typeset, err.Error())
-			}
+	}
+	if fm.Papersize != "" {
+		pageSizeCSS := fmt.Sprintf("@page { size: %s; }", fm.Papersize)
+		if err := cb.AddCSS(pageSizeCSS); err != nil {
+			return false, "", fmt.Errorf("%w: applying papersize: %s", errkind.Typeset, err.Error())
 		}
-		if fm.CSS != "" {
-			cssPath := ResolveFrontmatterCSS(baseDir, fm.CSS)
-			if err := cb.ReadCSSFile(cssPath); err != nil {
-				return false, "", fmt.Errorf("%w: reading CSS file %s: %s", errkind.IO, cssPath, err.Error())
-			}
+	}
+	if fm.CSS != "" {
+		cssPath := ResolveFrontmatterCSS(baseDir, fm.CSS)
+		if err := cb.ReadCSSFile(cssPath); err != nil {
+			return false, "", fmt.Errorf("%w: reading CSS file %s: %s", errkind.IO, cssPath, err.Error())
 		}
 	}
 	if opts.CSSFile != "" {

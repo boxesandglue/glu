@@ -1,6 +1,8 @@
 package markdown
 
-// defaultCSS provides a basic stylesheet for Markdown-generated HTML.
+// defaultCSS is the base stylesheet shared by the Markdown and HTML
+// modes (loaded in renderHTMLToPDF, beneath front-matter css, --css
+// and the document's own <style>/<link>).
 const defaultCSS = `
 @page {
 	size: a4;
@@ -11,10 +13,10 @@ body {
 	font-family: serif;
 	font-size: 10pt;
 	line-height: 1.4;
-	/* Markdown content rarely sets an explicit direction, so the base
-	 * direction is derived from the first strong character (CSS Writing
-	 * Modes 3 §2.4). HTML mode has no default stylesheet and therefore
-	 * defaults to the CSS UA value of "isolate", i.e. strict LTR. */
+	/* Content rarely sets an explicit direction, so the base direction
+	 * is derived from the first strong character (CSS Writing Modes 3
+	 * §2.4). Applies to Markdown and HTML mode alike; a dir= attribute
+	 * or an explicit unicode-bidi declaration overrides it. */
 	unicode-bidi: plaintext;
 }
 
@@ -64,16 +66,6 @@ h6 {
 h1, h2, h3, h4, h5, h6 {
 	break-after: avoid;
 }
-
-/* PDF bookmarks (outline) — Markdown convention: h1 and h2 share the top
-   level (h1 is often the document title, h2 the sections), deeper headings
-   nest one rung per level and start collapsed. h1 keeps htmlbag's default
-   level 1, so only h2+ need an explicit -bag-bookmark level. */
-h2 { -bag-bookmark: 1; }
-h3 { -bag-bookmark: 2 closed; }
-h4 { -bag-bookmark: 3 closed; }
-h5 { -bag-bookmark: 4 closed; }
-h6 { -bag-bookmark: 5 closed; }
 
 p {
 	margin-top: 6pt;
@@ -144,4 +136,21 @@ strong, b {
 em, i {
 	font-style: italic;
 }
+`
+
+// markdownOutlineCSS is loaded on top of defaultCSS in Markdown mode only.
+// It encodes the Markdown outline convention: "#" is usually the one-off
+// document title and "##" the sections, so h1 and h2 share the top PDF
+// bookmark level; deeper headings nest one rung per level and start
+// collapsed. h1 keeps htmlbag's default level 1, so only h2+ need an
+// explicit -bag-bookmark level. HTML (and the htmlbag Lua bridge, e.g.
+// the XSL-FO walker) intentionally stays on htmlbag's neutral 1:1
+// nesting: there the author chose the heading levels deliberately and
+// the outline should mirror them.
+const markdownOutlineCSS = `
+h2 { -bag-bookmark: 1; }
+h3 { -bag-bookmark: 2 closed; }
+h4 { -bag-bookmark: 3 closed; }
+h5 { -bag-bookmark: 4 closed; }
+h6 { -bag-bookmark: 5 closed; }
 `
