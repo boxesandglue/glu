@@ -130,6 +130,21 @@ func stdinToTempFile(ext string) (string, error) {
 	return f.Name(), nil
 }
 
+// multicallName returns the effective multi-call name for a binary invoked
+// as argv0: the value of --as when set, otherwise the basename with only a
+// Windows .exe suffix stripped. Stripping any extension would mangle names
+// like "glu-0.0.31" into "glu-0.0". The result "glu" means no dispatch.
+func multicallName(argv0, asName string) string {
+	if asName != "" {
+		return asName
+	}
+	base := filepath.Base(argv0)
+	if strings.EqualFold(filepath.Ext(base), ".exe") {
+		base = strings.TrimSuffix(base, filepath.Ext(base))
+	}
+	return base
+}
+
 func dothings() error {
 	now := time.Now()
 	var loglevel string = "info"
@@ -151,6 +166,7 @@ func dothings() error {
 	var manifestPath string
 	var sourceDateEpochStr string
 	var watchMode bool
+	var asName string
 	op := optionparser.NewOptionParser()
 	op.Banner = "glu - typesetting with boxes and glue"
 	op.Coda = helpCoda()
@@ -167,6 +183,7 @@ func dothings() error {
 	op.On("--manifest FILE", "Write a JSON manifest (pages, passes, headings, duration)", &manifestPath)
 	op.On("--source-date-epoch SECONDS", "Override PDF CreationDate (also honours $SOURCE_DATE_EPOCH)", &sourceDateEpochStr)
 	op.On("-w", "--watch", "Re-render on changes to input, companion .lua, or --css file", &watchMode)
+	op.On("--as NAME", "Override the multi-call name ('--as glu' disables script dispatch)", &asName)
 	op.On("--template", "Apply Go template expansion (Markdown mode)", &useTemplate)
 	op.On("--css FILE", "Additional CSS file", &cssFile)
 	op.On("--markdown", "Print expanded Markdown to stdout (debug)", &debugMarkdown)
@@ -228,7 +245,7 @@ func dothings() error {
 	//   2. directory of the symlink (os.Args[0])
 	// Flags that glu owns (--loglevel, --css, etc.) are still handled
 	// up front; everything else goes to the script.
-	binBase := strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0]))
+	binBase := multicallName(os.Args[0], asName)
 	if binBase != "glu" {
 		scriptName := binBase + ".lua"
 		scriptPath := ""
@@ -247,7 +264,7 @@ func dothings() error {
 			}
 		}
 		if scriptPath == "" {
-			return fmt.Errorf("%w: multi-call %q: no %s found in current directory or next to %s", errkind.IO, binBase, scriptName, os.Args[0])
+			return fmt.Errorf("%w: multi-call %q: no %s found in current directory or next to %s (pass --as glu if this is a renamed glu binary, or run 'glu %s' directly)", errkind.IO, binBase, scriptName, os.Args[0], scriptName)
 		}
 		op.Extra = append([]string{scriptPath}, op.Extra...)
 	}

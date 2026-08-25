@@ -105,6 +105,13 @@ forwarded — see *MULTI-CALL BINARY*.
 	Incompatible with stdin input and with *--markdown* / *--html*
 	debug modes.
 
+*--as* _NAME_
+	Override the multi-call name that is otherwise derived from the
+	binary's basename. *--as glu* disables script dispatch (useful
+	when running a renamed copy of the binary, e.g. _glu-nightly_);
+	any other _NAME_ runs _NAME.lua_ as if the binary were invoked
+	through a _NAME_ symlink. See *MULTI-CALL BINARY*.
+
 *-v*, *--version*
 	Print version and exit.
 
@@ -217,13 +224,20 @@ Register via *glu.frontend.add_callback(name, fn)* in a companion or
 # MULTI-CALL BINARY
 
 When *glu*'s basename is not literally "glu" (typically reached via a
-symlink), *glu* searches for _<basename>.lua_ in:
+symlink; a Windows _.exe_ suffix is ignored), *glu* searches for
+_<basename>.lua_ in:
 
 . the current working directory;
 . the directory of the symlink (*os.Args[0]*).
 
 The first match is run with all positional arguments forwarded.
 Flags that *glu* owns are still parsed first.
+
+*--as* _NAME_ overrides the detected basename in both directions:
+*--as glu* turns a renamed binary back into plain *glu*, and
+*--as report* dispatches to _report.lua_ without a symlink. The
+latter is handy on Windows, where creating symlinks requires
+elevated rights; a wrapper script passing *--as* does the job.
 
 # EXIT CODES
 
