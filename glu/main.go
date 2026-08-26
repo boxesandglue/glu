@@ -369,7 +369,11 @@ func dothings() error {
 
 	// Resolve log path: explicit --log-file wins; "-" disables the
 	// log file entirely. Otherwise the log sits next to the PDF.
-	noLogFile := logFile == "-"
+	// The debug dump modes (--markdown / --html) produce no PDF, so
+	// they skip the default log file too; an explicit --log-file FILE
+	// is still honoured.
+	debugDump := debugMarkdown || debugHTML
+	noLogFile := logFile == "-" || (logFile == "" && debugDump)
 	logfilename := logFile
 	if logfilename == "" {
 		logfilename = logPathFor(resolvedOutput)
@@ -492,7 +496,11 @@ func dothings() error {
 			}
 			logger.Info("Manifest written", "file", manifestPath)
 		}
-		logger.Info("Build done", "duration", time.Since(buildStart).String())
+		if debugDump {
+			logger.Info("Debug output written to stdout, no PDF produced")
+		} else {
+			logger.Info("Build done", "duration", time.Since(buildStart).String())
+		}
 		return nil
 	}
 
@@ -511,8 +519,12 @@ func dothings() error {
 	}
 
 	elapsed := time.Since(now)
-	logger.Info("Transcript written", "file", logfilename)
-	logger.Info("Total duration", "duration", elapsed.String())
+	if !noLogFile {
+		logger.Info("Transcript written", "file", logfilename)
+	}
+	if !debugDump {
+		logger.Info("Total duration", "duration", elapsed.String())
+	}
 
 	return nil
 }
