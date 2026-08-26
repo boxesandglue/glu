@@ -129,6 +129,18 @@ hr {
 	border-top: 0.5pt solid #999999;
 }
 
+/* The footnotes extension collects all notes in an endnote block
+   (div.footnotes) separated by an <hr>. Notes are set smaller, and the
+   web-style backlink (↩, a glyph most text fonts lack) is hidden for
+   print; re-enable it with .footnote-backref { display: inline; }. */
+div.footnotes {
+	font-size: 0.85em;
+}
+
+.footnote-backref {
+	display: none;
+}
+
 strong, b {
 	font-weight: bold;
 }

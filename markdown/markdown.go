@@ -8,9 +8,11 @@ import (
 	"fmt"
 	htmlpkg "html"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -31,6 +33,7 @@ import (
 	luacommon "github.com/boxesandglue/glu/lua/common"
 	luafrontend "github.com/boxesandglue/glu/lua/frontend"
 	"github.com/boxesandglue/glu/markdown/mathext"
+	"github.com/boxesandglue/glu/markdown/mdext"
 )
 
 // preTrailingNL matches a trailing newline (possibly inside a chroma
@@ -348,12 +351,83 @@ func runMarkdownPass(l *lua.State, filename, sourceDir, body string, fm Frontmat
 	return renderHTMLToPDF(l, htmlStr, sourceDir, outputFilename, auxPath, fm, opts, markdownOutlineCSS, oldAux)
 }
 
+// mdExtensionDefaults maps the user-facing Markdown extension names
+// (pandoc spelling, selected via the "extensions" frontmatter key) to
+// their default state. Purely additive syntax that cannot occur in
+// existing documents is on by default; anything that changes the
+// rendering of plain text (smart) or the identifier set of headings
+// (auto_identifiers, and with it the PDF destinations) is opt-in.
+var mdExtensionDefaults = map[string]bool{
+	"fenced_divs":      true,
+	"bracketed_spans":  true,
+	"footnotes":        true,
+	"definition_lists": true,
+	"smart":            false,
+	"auto_identifiers": false,
+	"tex_math_dollars": false,
+}
+
+// resolveExtensions merges the frontmatter "extensions" list into the
+// default set. A leading "-" disables an extension, an optional leading
+// "+" enables one (pandoc style); unknown names are an error. The legacy
+// `math: true` key is an alias for tex_math_dollars.
+func resolveExtensions(fm Frontmatter) (map[string]bool, error) {
+	enabled := maps.Clone(mdExtensionDefaults)
+	if fm.Math {
+		enabled["tex_math_dollars"] = true
+	}
+	for _, name := range fm.Extensions {
+		state := true
+		switch {
+		case strings.HasPrefix(name, "-"):
+			state = false
+			name = name[1:]
+		case strings.HasPrefix(name, "+"):
+			name = name[1:]
+		}
+		if _, ok := enabled[name]; !ok {
+			known := make([]string, 0, len(mdExtensionDefaults))
+			for k := range mdExtensionDefaults {
+				known = append(known, k)
+			}
+			sort.Strings(known)
+			return nil, fmt.Errorf("unknown markdown extension %q (available: %s)", name, strings.Join(known, ", "))
+		}
+		enabled[name] = state
+	}
+	return enabled, nil
+}
+
+// newTypographer builds the Typographer ("smart") extension. German
+// documents (lang: de*) get German quotation marks; every other language
+// keeps goldmark's English defaults. The apostrophe stays U+2019 either
+// way ("geht's").
+func newTypographer(langTag string) goldmark.Extender {
+	if langTag == "de" || strings.HasPrefix(langTag, "de-") || strings.HasPrefix(langTag, "de_") {
+		return extension.NewTypographer(
+			extension.WithTypographicSubstitutions(extension.TypographicSubstitutions{
+				extension.LeftSingleQuote:  []byte("‚"),
+				extension.RightSingleQuote: []byte("‘"),
+				extension.LeftDoubleQuote:  []byte("„"),
+				extension.RightDoubleQuote: []byte("“"),
+			}),
+		)
+	}
+	return extension.NewTypographer()
+}
+
 // markdownToHTML converts body to HTML via goldmark. Highlight style
 // comes from front matter (highlight-style key), defaulting to github.
+// The optional Markdown extensions are switched through the frontmatter
+// "extensions" key (see mdExtensionDefaults for names and defaults).
 func markdownToHTML(body string, fm Frontmatter) (string, error) {
 	highlightStyle := "github"
 	if s, ok := fm.Extra["highlight-style"].(string); ok {
 		highlightStyle = s
+	}
+	exts, err := resolveExtensions(fm)
+	if err != nil {
+		return "", fmt.Errorf("%w: frontmatter extensions: %s", errkind.Typeset, err.Error())
 	}
 	extensions := []goldmark.Extender{
 		extension.Table,
@@ -365,35 +439,63 @@ func markdownToHTML(body string, fm Frontmatter) (string, error) {
 		//   A paragraph.
 		//   {.initial}
 		// becomes <p class="initial">. Works for every block type;
-		// inline spans are not supported. ATX headings keep their
-		// suffix syntax via parser.WithAttribute below.
+		// inline spans are covered by bracketed_spans below. ATX
+		// headings keep their suffix syntax via parser.WithAttribute
+		// below.
 		attributes.Extension,
 		highlighting.NewHighlighting(
 			highlighting.WithStyle(highlightStyle),
 		),
 	}
-	// Opt-in TeX math: `math: true` in the frontmatter turns on dollar-math
-	// parsing ($…$ inline, $$…$$ display → MathML). It is off by default so a
-	// document that uses $ as a currency sign is never reinterpreted.
-	if fm.Math {
+	if exts["fenced_divs"] {
+		extensions = append(extensions, mdext.FencedDivs)
+	}
+	if exts["bracketed_spans"] {
+		extensions = append(extensions, mdext.BracketedSpans)
+	}
+	if exts["footnotes"] {
+		extensions = append(extensions, extension.Footnote)
+	}
+	if exts["definition_lists"] {
+		extensions = append(extensions, extension.DefinitionList)
+	}
+	if exts["smart"] {
+		extensions = append(extensions, newTypographer(fm.Lang))
+	}
+	// Dollar-math parsing ($…$ inline, $$…$$ display → MathML) stays
+	// off by default so a document that uses $ as a currency sign is
+	// never reinterpreted. `math: true` is the legacy spelling of
+	// `extensions: tex_math_dollars`.
+	if exts["tex_math_dollars"] {
 		extensions = append(extensions, mathext.Math)
+	}
+	// WithAttribute lets a {.class #id key=value} suffix on ATX
+	// headings turn into HTML attributes, e.g. "# Title {.right}"
+	// → <h1 class="right">. Despite the goldmark docs saying
+	// "block elements", v1.7.16 implements this for headings
+	// only; every other block type is covered by the
+	// attributes.Extension above (attribute line after the
+	// block).
+	parserOptions := []parser.Option{parser.WithAttribute()}
+	if exts["auto_identifiers"] {
+		parserOptions = append(parserOptions, parser.WithAutoHeadingID())
 	}
 	gm := goldmark.New(
 		goldmark.WithExtensions(extensions...),
-		// WithAttribute lets a {.class #id key=value} suffix on ATX
-		// headings turn into HTML attributes, e.g. "# Title {.right}"
-		// → <h1 class="right">. Despite the goldmark docs saying
-		// "block elements", v1.7.16 implements this for headings
-		// only; every other block type is covered by the
-		// attributes.Extension above (attribute line after the
-		// block).
-		goldmark.WithParserOptions(parser.WithAttribute()),
+		goldmark.WithParserOptions(parserOptions...),
 		goldmark.WithRendererOptions(
 			goldmarkhtml.WithUnsafe(),
 		),
 	)
+	var convertOptions []parser.ParseOption
+	if exts["auto_identifiers"] {
+		// Swap in the pandoc-style generator so non-ASCII headings keep
+		// their letters ("Über uns" → "über-uns", not "ber-uns").
+		convertOptions = append(convertOptions,
+			parser.WithContext(parser.NewContext(parser.WithIDs(mdext.NewPandocIDs()))))
+	}
 	var htmlBuf bytes.Buffer
-	if err := gm.Convert([]byte(body), &htmlBuf); err != nil {
+	if err := gm.Convert([]byte(body), &htmlBuf, convertOptions...); err != nil {
 		return "", fmt.Errorf("%w: goldmark convert: %s", errkind.Typeset, err.Error())
 	}
 	// Strip trailing newline inside <pre><code> blocks (chroma and

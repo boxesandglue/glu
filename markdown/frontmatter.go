@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -15,8 +16,48 @@ type Frontmatter struct {
 	Format      string           `yaml:"format"`
 	Lang        string           `yaml:"lang"`
 	Math        bool             `yaml:"math"`
+	Extensions  ExtensionList    `yaml:"extensions"`
 	Attachments []AttachmentSpec `yaml:"attachments"`
 	Extra       map[string]any   `yaml:"-"` // all key-value pairs (including the known ones)
+}
+
+// ExtensionList is the value of the "extensions" frontmatter key: Markdown
+// extension names in pandoc spelling (fenced_divs, smart, …), a leading
+// "-" disables a default-enabled extension. Both a comma- or
+// space-separated scalar and a YAML sequence are accepted:
+//
+//	extensions: smart, auto_identifiers, -footnotes
+//	extensions: [smart, -footnotes]
+type ExtensionList []string
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+func (e *ExtensionList) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		*e = splitExtensionNames(value.Value)
+	case yaml.SequenceNode:
+		var raw []string
+		if err := value.Decode(&raw); err != nil {
+			return err
+		}
+		var out ExtensionList
+		for _, entry := range raw {
+			out = append(out, splitExtensionNames(entry)...)
+		}
+		*e = out
+	}
+	// Other node kinds are ignored, matching the lenient frontmatter
+	// parsing elsewhere in this file.
+	return nil
+}
+
+// splitExtensionNames splits a scalar extension spec on commas and
+// whitespace and drops empty entries.
+func splitExtensionNames(s string) ExtensionList {
+	fields := strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || unicode.IsSpace(r)
+	})
+	return ExtensionList(fields)
 }
 
 // AttachmentSpec is a single entry in the Frontmatter Attachments list. File is

@@ -179,6 +179,66 @@ Markdown mode reads YAML front matter between two *---* lines:
 :  BCP47 tag — /Lang + hyphenation default
 |  highlight-style
 :  chroma highlight name (default *github*)
+|  extensions
+:  Markdown extension list, see _MARKDOWN EXTENSIONS_
+|  math
+:  *true* is the legacy spelling of *extensions: tex_math_dollars*
+|  attachments
+:  list of files to embed, each with _file_ and optional _name_,
+   _description_, _mimetype_
+
+# MARKDOWN EXTENSIONS
+
+Optional Markdown syntax is switched through the *extensions:*
+frontmatter key. It takes extension names (pandoc spelling) as a
+comma-separated value or a YAML list; a leading *-* disables a
+default-enabled extension:
+
+```
+extensions: smart, auto_identifiers, -footnotes
+```
+
+[[ *name*
+:[ *default*
+:< *meaning*
+|  fenced_divs
+:  on
+:  *::: {.class lang=en}* ... *:::* wraps blocks in a div; a bare word
+   is a class shorthand (*::: warning*). Closing fences close the
+   innermost open div, so divs nest.
+|  bracketed_spans
+:  on
+:  *[inline text]{.class lang=en}* becomes a span with attributes,
+   e.g. for language changes or styling mid-paragraph.
+|  footnotes
+:  on
+:  *[^1]* references with *[^1]: text* definitions; notes are
+   collected in an endnote block at the end of the document.
+|  definition_lists
+:  on
+:  a *: definition* line after a term paragraph builds dl/dt/dd.
+|  smart
+:  off
+:  typographic quotes, dashes (*--*, *---*) and ellipsis. With
+   *lang: de\** German quotation marks are used.
+|  auto_identifiers
+:  off
+:  headings without an explicit *{#id}* get one derived from their
+   text (pandoc algorithm, non-ASCII letters survive), enabling
+   *[link](#section-title)* cross-references.
+|  tex_math_dollars
+:  off
+:  *$...$* inline and *$$...$$* display math rendered via MathML.
+
+The defaults are chosen so that existing documents render unchanged:
+default-on extensions use syntax that plain documents cannot contain,
+while *smart* and *auto_identifiers* alter regular text or the
+identifier set and are opt-in.
+
+A *lang=* attribute on a div (or any block element) switches the
+hyphenation language for its content; in PDF/UA mode the switch is also
+declared as _/Lang_ on the element's structure tag, so assistive
+technology reads the section in the right language.
 
 # COMPANION SCRIPTS
 
