@@ -765,6 +765,7 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if anchorsRaw, ok := oldAux["_anchors"].(map[string]any); ok {
 		anchorPages := make(map[string]int, len(anchorsRaw))
 		anchorTexts := make(map[string]string, len(anchorsRaw))
+		anchorCounters := make(map[string]map[string][]int, len(anchorsRaw))
 		for id, raw := range anchorsRaw {
 			switch v := raw.(type) {
 			case float64:
@@ -777,10 +778,32 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 				if t, ok := v["text"].(string); ok {
 					anchorTexts[id] = t
 				}
+				if cs, ok := v["counters"].(map[string]any); ok {
+					counters := make(map[string][]int, len(cs))
+					for name, chainRaw := range cs {
+						chain, ok := chainRaw.([]any)
+						if !ok {
+							continue
+						}
+						vals := make([]int, 0, len(chain))
+						for _, cv := range chain {
+							if f, ok := cv.(float64); ok {
+								vals = append(vals, int(f))
+							}
+						}
+						if len(vals) > 0 {
+							counters[name] = vals
+						}
+					}
+					if len(counters) > 0 {
+						anchorCounters[id] = counters
+					}
+				}
 			}
 		}
 		cb.SetAnchorPages(anchorPages)
 		cb.SetAnchorTexts(anchorTexts)
+		cb.SetAnchorCounters(anchorCounters)
 	}
 
 	// Install lifecycle callbacks. Must happen after CSSBuilder
@@ -849,10 +872,14 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	anchors := make(map[string]any, len(cb.Anchors))
 	for _, a := range cb.Anchors {
 		if a.ID != "" && a.Page > 0 {
-			anchors[a.ID] = map[string]any{
+			entry := map[string]any{
 				"page": a.Page,
 				"text": a.Text,
 			}
+			if len(a.Counters) > 0 {
+				entry["counters"] = a.Counters
+			}
+			anchors[a.ID] = entry
 		}
 	}
 	curAux["_anchors"] = anchors
