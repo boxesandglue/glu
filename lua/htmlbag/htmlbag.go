@@ -31,6 +31,8 @@ import (
 //     format   = "PDF/UA"     -- PDF conformance level
 //     lang     = "en-US"      -- BCP47, written to PDF /Lang
 //     title    = "Showcase"   -- PDF /Title (also XMP dc:title)
+//     trace    = "boxmodel"   -- debug overlays, comma-separated
+//                             -- (boxmodel, dests, hboxes, hyperlinks)
 //
 // Unknown keys are silently ignored. base_dir defaults to ".".
 func luaRender(l *lua.State) int {
@@ -56,6 +58,9 @@ func luaRender(l *lua.State) int {
 				}
 				if v, ok := m["title"].(string); ok {
 					opts.Title = v
+				}
+				if v, ok := m["trace"].(string); ok {
+					opts.Trace = v
 				}
 			}
 		}

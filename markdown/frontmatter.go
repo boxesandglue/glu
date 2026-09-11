@@ -18,6 +18,11 @@ type Frontmatter struct {
 	Math        bool             `yaml:"math"`
 	Extensions  ExtensionList    `yaml:"extensions"`
 	Attachments []AttachmentSpec `yaml:"attachments"`
+	// Trace lists debug overlay switches (boxmodel, dests, hboxes,
+	// hyperlinks), the glu counterpart of xts' <Trace> element. Accepts
+	// the same list syntax as extensions (scalar or YAML sequence) and is
+	// combined with the --trace CLI flag.
+	Trace ExtensionList `yaml:"trace"`
 	Extra       map[string]any   `yaml:"-"` // all key-value pairs (including the known ones)
 }
 

@@ -143,6 +143,11 @@ type Options struct {
 	// xref content) this yields byte-stable PDFs across runs with the
 	// same input — the SOURCE_DATE_EPOCH reproducible-builds protocol.
 	SourceDateEpoch time.Time
+	// Trace lists debug overlay switches, comma- or space-separated
+	// (the --trace CLI flag): boxmodel, dests, hboxes, hyperlinks.
+	// Combined (union) with the frontmatter trace: key, so an ad-hoc
+	// CLI trace does not require editing the document.
+	Trace string
 }
 
 // resolveOutput chooses the actual PDF output path: opts.OutputPath if
@@ -685,6 +690,31 @@ func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, op
 	return nil
 }
 
+// applyTraces enables the debug overlays requested via the frontmatter
+// trace: key or the --trace CLI flag. The switch names mirror the
+// attributes of xts' <Trace> element where the underlying feature lives
+// in htmlbag or the backend: boxmodel (CSS box model overlay), hboxes
+// (line metrics: height/depth tints, baseline), hyperlinks (frames
+// around link areas), dests (marks at PDF destinations). The xts-only
+// switches (grid, gridallocation, objects, hyphenation) are grid-layout
+// features without an HTML pipeline equivalent.
+func applyTraces(fe *frontend.Document, cb *htmlbag.CSSBuilder, names []string) {
+	for _, name := range names {
+		switch strings.ToLower(name) {
+		case "boxmodel":
+			cb.TraceBoxModel = true
+		case "hboxes":
+			fe.Doc.SetVTrace(document.VTraceHBoxes)
+		case "hyperlinks":
+			fe.Doc.SetVTrace(document.VTraceHyperlinks)
+		case "dests":
+			fe.Doc.SetVTrace(document.VTraceDest)
+		default:
+			slog.Warn("Unknown trace switch", "value", name, "known", "boxmodel, dests, hboxes, hyperlinks")
+		}
+	}
+}
+
 // renderHTMLToPDF is the shared core for both Markdown and HTML
 // paths. The caller has already loaded the companion Lua file, fired
 // document_start / content_ready, and (for Markdown) run any {lua}
@@ -756,6 +786,7 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if err != nil {
 		return false, "", fmt.Errorf("%w: creating CSS builder: %s", errkind.Typeset, err.Error())
 	}
+	applyTraces(fe, cb, append(splitExtensionNames(opts.Trace), fm.Trace...))
 	// PDF bookmarks are emitted automatically by htmlbag. In Markdown mode
 	// markdownOutlineCSS maps the heading levels with -bag-bookmark (h1 and
 	// h2 share the top level); HTML mode keeps htmlbag's 1:1 nesting.

@@ -167,6 +167,7 @@ func dothings() error {
 	var sourceDateEpochStr string
 	var watchMode bool
 	var asName string
+	var traceStr string
 	op := optionparser.NewOptionParser()
 	op.Banner = "glu - typesetting with boxes and glue"
 	op.Coda = helpCoda()
@@ -188,6 +189,7 @@ func dothings() error {
 	op.On("--css FILE", "Additional CSS file", &cssFile)
 	op.On("--markdown", "Print expanded Markdown to stdout (debug)", &debugMarkdown)
 	op.On("--html", "Print generated HTML to stdout (debug, Markdown mode)", &debugHTML)
+	op.On("--trace LIST", "Debug overlays: boxmodel, dests, hboxes, hyperlinks (comma-separated)", &traceStr)
 	op.On("--clean", "Remove auxiliary files before processing", &clean)
 	op.On("--cpuprofile FILE", "Write CPU profile to file", &cpuprofile)
 	op.Command("help", "Show the help message")
@@ -468,6 +470,7 @@ func dothings() error {
 				Result:          result,
 				SourceDateEpoch: sourceDateEpoch,
 				Format:          pdfFormat,
+				Trace:           traceStr,
 			}
 			if err := markdown.ProcessFile(mainfile, opts); err != nil {
 				return err
@@ -482,6 +485,7 @@ func dothings() error {
 				Result:          result,
 				SourceDateEpoch: sourceDateEpoch,
 				Format:          pdfFormat,
+				Trace:           traceStr,
 			}
 			if err := markdown.ProcessHTMLFile(mainfile, opts); err != nil {
 				return err
