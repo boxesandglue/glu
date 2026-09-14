@@ -22,7 +22,7 @@
           pname = "glu";
           version = "0.0.36";
           src = self;
-          vendorHash = "sha256-17lYW9ng4NuqG/2FbQ5QGr/gK9UZmkWsnUs8DrGiPEw=";
+          vendorHash = "sha256-T5+hf05+C3FQUAIroYpAuU7N4CwdEiNQ8uEgZTZIjAw=";
           subPackages = [ "glu" ];
           # The golden tests compare rendered PDFs and need fonts and
           # poppler, which are not available inside the build sandbox.
