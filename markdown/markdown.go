@@ -19,7 +19,6 @@ import (
 
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/frontend"
-	"github.com/boxesandglue/csshtml"
 	"github.com/boxesandglue/htmlbag"
 	"github.com/speedata/go-lua"
 	attributes "github.com/mdigger/goldmark-attributes"
@@ -777,7 +776,7 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 		}
 	}
 
-	cssParser := csshtml.NewCSSParserWithDefaults()
+	cssParser := htmlbag.NewCSSParserWithDefaults()
 	if baseDir != "" {
 		cssParser.PushDir(baseDir)
 	}
