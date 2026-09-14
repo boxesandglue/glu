@@ -1,8 +1,14 @@
 name: Nix
+# Release-only on purpose. The flake pins a vendorHash that has to match
+# go.mod/go.sum exactly, and only `rake release` rewrites it (rakelib/dist.rake,
+# update_flake). Running on every push meant every dependency bump between two
+# releases left this workflow red until the next release, which is noise, not
+# signal. `rake release` pushes the tag, so the build lands where the hash is
+# guaranteed fresh; workflow_dispatch is there for checking a branch by hand.
 on:
   push:
-    branches: [main]
-  pull_request:
+    tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,8 +18,8 @@ jobs:
 
       - uses: cachix/install-nix-action@v31
 
-      # Catches a stale vendorHash after go.mod/go.sum changes: the
-      # build then fails with a hash mismatch that names the new hash.
+      # Verifies the published tag builds on Linux; rake release only ever
+      # built it on the release machine.
       - name: Build glu via flake
         run: nix build
 
