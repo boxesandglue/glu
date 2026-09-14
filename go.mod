@@ -6,7 +6,7 @@ require (
 	github.com/boxesandglue/baseline-pdf v1.1.22
 	github.com/boxesandglue/boxesandglue v0.2.52
 	github.com/boxesandglue/hobby v0.0.6
-	github.com/boxesandglue/htmlbag v0.0.54
+	github.com/boxesandglue/htmlbag v0.0.56
 	github.com/boxesandglue/svgreader v0.0.4
 	github.com/boxesandglue/textshape v0.0.15
 	github.com/fsnotify/fsnotify v1.10.1

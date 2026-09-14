@@ -62,7 +62,7 @@ func pageInfoIndex(l *lua.State) int {
 		l.NewTable()
 		for areaName, props := range areas {
 			l.NewTable()
-			for k, v := range props {
+			for k, v := range props.Strings() {
 				l.PushString(v)
 				l.SetField(-2, k)
 			}
