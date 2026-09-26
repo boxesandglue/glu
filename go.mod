@@ -3,12 +3,12 @@ module github.com/boxesandglue/glu
 go 1.25.0
 
 require (
-	github.com/boxesandglue/baseline-pdf v1.1.22
-	github.com/boxesandglue/boxesandglue v0.2.57
+	github.com/boxesandglue/baseline-pdf v1.1.23
+	github.com/boxesandglue/boxesandglue v0.2.64
 	github.com/boxesandglue/hobby v0.0.6
-	github.com/boxesandglue/htmlbag v0.0.61
+	github.com/boxesandglue/htmlbag v0.0.67
 	github.com/boxesandglue/svgreader v0.0.5
-	github.com/boxesandglue/textshape v0.0.15
+	github.com/boxesandglue/textshape v0.0.16
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/mdigger/goldmark-attributes v0.0.0-20250724115859-bd3108091530
 	github.com/speedata/cxpath v0.0.9
