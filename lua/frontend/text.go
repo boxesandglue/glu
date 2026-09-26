@@ -233,6 +233,10 @@ func settingKeyToType(key string) frontend.SettingType {
 		return frontend.SettingHAlign
 	case "valign":
 		return frontend.SettingVAlign
+	case "tabstops", "tab_stops":
+		return frontend.SettingTabStops
+	case "leader":
+		return frontend.SettingLeader
 	}
 	return 0
 }
@@ -250,6 +254,14 @@ func pushSettingValue(l *lua.State, settingType frontend.SettingType, val any) {
 	case frontend.SettingFontWeight:
 		if w, ok := val.(frontend.FontWeight); ok {
 			l.PushInteger(int(w))
+		}
+	case frontend.SettingLeader:
+		if s, ok := val.(string); ok {
+			l.PushString(s)
+		}
+	case frontend.SettingTabStops:
+		if stops, ok := val.([]frontend.TabStop); ok {
+			pushTabStops(l, stops)
 		}
 	default:
 		l.PushNil()
@@ -414,6 +426,13 @@ func parseSettingKeyValue(l *lua.State, key string, valueIndex int) (frontend.Se
 	case "linethrough", "line_through":
 		if l.ToBoolean(valueIndex) {
 			return frontend.SettingTextDecorationLine, frontend.TextDecorationLineThrough
+		}
+	case "tabstops", "tab_stops":
+		return frontend.SettingTabStops, parseTabStops(l, valueIndex)
+	case "leader":
+		if l.IsString(valueIndex) {
+			s, _ := l.ToString(valueIndex)
+			return frontend.SettingLeader, s
 		}
 	}
 	return 0, nil
