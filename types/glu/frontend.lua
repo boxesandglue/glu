@@ -49,12 +49,12 @@ function frontend.text(settings) end
 ---@field underline? boolean Underline text
 ---@field line_through? boolean Strikethrough text
 ---@field leader? string Leader pattern (e.g. " . ") repeated to fill the line, for contents lines
----@field tab_stops? (Dimension|TabStop)[] Tab stops; a plain dimension is a left stop
+---@field tab_stops? (Dimension|string|TabStop)[] Tab stops; a plain position is a left stop
 ---@field tabstops? (Dimension|TabStop)[] Tab stops (alias)
 
 ---A tab stop. A tab advances to the first stop past the text before it.
 ---@class TabStop
----@field position Dimension Distance from the paragraph's start edge
+---@field position Dimension|string Distance from the paragraph's start edge, or a percentage of the line width such as "100%"
 ---@field align? "left"|"right"|"center"|"decimal" How the text after the tab lines up with the stop (default "left")
 ---@field separator? string What a decimal stop aligns on (default ".")
 ---@field leader? string Pattern repeated across the tab, e.g. " . "

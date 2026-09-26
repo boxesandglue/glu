@@ -1,13 +1,17 @@
 package frontend
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/boxesandglue/boxesandglue/backend/node"
 	"github.com/boxesandglue/boxesandglue/frontend"
 	"github.com/speedata/go-lua"
 )
 
 // parseTabStops reads the tab_stops setting: a list whose entries are either
-// a dimension (a left stop) or a table with position, align ("left",
+// a position (a left stop) or a table with position, align ("left",
 // "right", "center", "decimal"), separator and leader.
 func parseTabStops(l *lua.State, index int) []frontend.TabStop {
 	index = l.AbsIndex(index)
@@ -29,19 +33,15 @@ func parseTabStops(l *lua.State, index int) []frontend.TabStop {
 func parseTabStop(l *lua.State, i int) frontend.TabStop {
 	var ts frontend.TabStop
 	if !l.IsTable(-1) {
-		sp, err := toDimension(l, -1)
-		if err != nil {
+		if err := tabStopPosition(l, &ts); err != nil {
 			lua.Errorf(l, "tab_stops[%d]: %s", i, err.Error())
 		}
-		ts.Position = sp
 		return ts
 	}
 	l.Field(-1, "position")
-	sp, err := toDimension(l, -1)
-	if err != nil {
+	if err := tabStopPosition(l, &ts); err != nil {
 		lua.Errorf(l, "tab_stops[%d].position: %s", i, err.Error())
 	}
-	ts.Position = sp
 	l.Pop(1)
 
 	l.Field(-1, "align")
@@ -76,13 +76,38 @@ func parseTabStop(l *lua.State, i int) frontend.TabStop {
 	return ts
 }
 
+// tabStopPosition reads the position on top of the stack: a dimension or a
+// percentage of the line width such as "100%".
+func tabStopPosition(l *lua.State, ts *frontend.TabStop) error {
+	if s, ok := l.ToString(-1); ok && l.IsString(-1) && !l.IsNumber(-1) {
+		if p, ok := strings.CutSuffix(s, "%"); ok {
+			f, err := strconv.ParseFloat(p, 64)
+			if err != nil {
+				return fmt.Errorf("invalid percentage %s", s)
+			}
+			ts.Fraction = f / 100
+			return nil
+		}
+	}
+	sp, err := toDimension(l, -1)
+	if err != nil {
+		return err
+	}
+	ts.Position = sp
+	return nil
+}
+
 // pushTabStops pushes the stops as a list of tables, the long form of
 // tab_stops.
 func pushTabStops(l *lua.State, stops []frontend.TabStop) {
 	l.CreateTable(len(stops), 0)
 	for i, ts := range stops {
 		l.CreateTable(0, 4)
-		pushScaledPoint(l, ts.Position)
+		if ts.Fraction != 0 {
+			l.PushString(strconv.FormatFloat(ts.Fraction*100, 'f', -1, 64) + "%")
+		} else {
+			pushScaledPoint(l, ts.Position)
+		}
 		l.SetField(-2, "position")
 		l.PushString(tabAlignToString(ts.Align))
 		l.SetField(-2, "align")
