@@ -237,6 +237,10 @@ func settingKeyToType(key string) frontend.SettingType {
 		return frontend.SettingTabStops
 	case "leader":
 		return frontend.SettingLeader
+	case "horizontal_scale":
+		return frontend.SettingHorizontalScale
+	case "font_expansion":
+		return frontend.SettingFontExpansion
 	}
 	return 0
 }
@@ -262,6 +266,10 @@ func pushSettingValue(l *lua.State, settingType frontend.SettingType, val any) {
 	case frontend.SettingTabStops:
 		if stops, ok := val.([]frontend.TabStop); ok {
 			pushTabStops(l, stops)
+		}
+	case frontend.SettingHorizontalScale, frontend.SettingFontExpansion:
+		if f, ok := val.(float64); ok {
+			l.PushNumber(f)
 		}
 	default:
 		l.PushNil()
@@ -433,6 +441,23 @@ func parseSettingKeyValue(l *lua.State, key string, valueIndex int) (frontend.Se
 		if l.IsString(valueIndex) {
 			s, _ := l.ToString(valueIndex)
 			return frontend.SettingLeader, s
+		}
+	case "horizontal_scale":
+		// A factor, 0.9 draws the glyphs at 90% of their width.
+		if f, ok := l.ToNumber(valueIndex); ok {
+			if f <= 0 {
+				lua.Errorf(l, "horizontal_scale must be greater than 0, got %f", f)
+			}
+			return frontend.SettingHorizontalScale, f
+		}
+	case "font_expansion":
+		// The share a glyph may be stretched or shrunk to fill a line,
+		// 0.05 is 5%, 0 turns it off.
+		if f, ok := l.ToNumber(valueIndex); ok {
+			if f < 0 || f > 1 {
+				lua.Errorf(l, "font_expansion must be between 0 and 1, got %f", f)
+			}
+			return frontend.SettingFontExpansion, f
 		}
 	}
 	return 0, nil

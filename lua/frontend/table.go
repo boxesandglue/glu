@@ -196,6 +196,53 @@ func rowIndex(l *lua.State) int {
 		return 1
 	}
 
+	row, ok := lua.CheckUserData(l, 1, tableRowMetaTable).(*TableRow)
+	if !ok {
+		return 0
+	}
+	switch key {
+	case "min_height":
+		pushScaledPoint(l, row.Value.MinHeight)
+		return 1
+	case "fixed_height":
+		pushScaledPoint(l, row.Value.FixedHeight)
+		return 1
+	case "valign":
+		l.PushString(valignToString(row.Value.VAlign))
+		return 1
+	case "break_inside":
+		l.PushBoolean(row.Value.BreakInside)
+		return 1
+	}
+
+	return 0
+}
+
+// rowNewIndex handles attribute setting (__newindex metamethod).
+// min_height is the least height of the row, fixed_height its exact height
+// (content that does not fit is drawn past it), valign the default
+// vertical alignment of its cells and break_inside whether the row may be
+// split across pages.
+func rowNewIndex(l *lua.State) int {
+	row, ok := lua.CheckUserData(l, 1, tableRowMetaTable).(*TableRow)
+	if !ok {
+		return 0
+	}
+
+	key := lua.CheckString(l, 2)
+
+	switch key {
+	case "min_height":
+		row.Value.MinHeight = checkDimension(l, 3)
+	case "fixed_height":
+		row.Value.FixedHeight = checkDimension(l, 3)
+	case "valign":
+		s, _ := l.ToString(3)
+		row.Value.VAlign = parseVAlign(s)
+	case "break_inside":
+		row.Value.BreakInside = l.ToBoolean(3)
+	}
+
 	return 0
 }
 
@@ -340,6 +387,7 @@ func registerTableRowMetaTable(l *lua.State) {
 	lua.NewMetaTable(l, tableRowMetaTable)
 	lua.SetFunctions(l, []lua.RegistryFunction{
 		{Name: "__index", Function: rowIndex},
+		{Name: "__newindex", Function: rowNewIndex},
 	}, 0)
 	l.Pop(1)
 }
