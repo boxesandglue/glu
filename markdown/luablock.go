@@ -117,6 +117,7 @@ func extractAndRunLuaBlocks(l *lua.State, source string) (string, error) {
 		// Extract and execute the Lua code
 		code := strings.TrimSpace(source[match[2]:match[3]])
 		top := l.Top()
+		markUserLua(l)
 		if err := lua.DoString(l, code); err != nil {
 			return "", fmt.Errorf("lua block error: %w", err)
 		}
@@ -160,6 +161,7 @@ func expandInlineExpressions(l *lua.State, source string) (string, error) {
 		expr := sub[1]
 		// Wrap in "return" so the expression yields a value
 		code := "return " + expr
+		markUserLua(l)
 		if err := lua.DoString(l, code); err != nil {
 			luaErr = fmt.Errorf("inline expression {= %s =}: %w", expr, err)
 			return match

@@ -80,6 +80,53 @@ func setAuxGlobal(l *lua.State, data map[string]any) {
 	l.Pop(1) // pop _aux
 }
 
+// userLuaKey marks in the registry of a pass's Lua state that user code
+// ran in it: the companion file, a {lua} block or an inline expression.
+const userLuaKey = "glu.markdown.userlua"
+
+func markUserLua(l *lua.State) {
+	l.PushBoolean(true)
+	l.SetField(lua.RegistryIndex, userLuaKey)
+}
+
+func ranUserLua(l *lua.State) bool {
+	l.Field(lua.RegistryIndex, userLuaKey)
+	defer l.Pop(1)
+	return l.ToBoolean(-1)
+}
+
+// needsAnotherPass reports whether the next pass can come out different
+// from this one. User Lua may have read anything in _aux, so after it any
+// change of the aux data counts. Without it the pass read only what
+// htmlbag looked up: the page count for counter(pages) and the anchors of
+// target-counter() and target-text(). A document that uses neither is
+// done after one pass, also when it had no aux file yet.
+func needsAnotherPass(oldAux, curAux map[string]any, reads htmlbag.PreviousPassReads, userLua bool) bool {
+	if userLua {
+		return !sameJSON(oldAux, curAux)
+	}
+	if reads.Pages && !sameJSON(oldAux["_pages"], curAux["_pages"]) {
+		return true
+	}
+	oldAnchors, _ := oldAux["_anchors"].(map[string]any)
+	curAnchors, _ := curAux["_anchors"].(map[string]any)
+	for id := range reads.Anchors {
+		if !sameJSON(oldAnchors[id], curAnchors[id]) {
+			return true
+		}
+	}
+	return false
+}
+
+// sameJSON compares two aux values as they are written to the aux file,
+// so that the float64 numbers read back from it equal the ints of the
+// pass that wrote them.
+func sameJSON(a, b any) bool {
+	ab, errA := json.Marshal(a)
+	bb, errB := json.Marshal(b)
+	return errA == nil && errB == nil && bytes.Equal(ab, bb)
+}
+
 // readAuxGlobal reads the _aux Lua global back into a Go map.
 func readAuxGlobal(l *lua.State) map[string]any {
 	l.Global("_aux")
@@ -517,6 +564,7 @@ func loadCompanionLua(l *lua.State, filename string) error {
 		return nil
 	}
 	slog.Info("Loading companion Lua file", "file", luaFile)
+	markUserLua(l)
 	if err := lua.DoFile(l, luaFile); err != nil {
 		return fmt.Errorf("%w: companion lua file %s: %s", errkind.Lua, luaFile, err.Error())
 	}
@@ -678,6 +726,8 @@ func extractHTMLMetaFormat(htmlStr string) string {
 // pass — embedders that need aux convergence drive the loop
 // themselves (typically: htmlbag Lua bridge from a user script).
 func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, opts Options) error {
+	// The caller is a user script, which can read _aux.
+	markUserLua(l)
 	auxPath := auxPathFor(outputFilename)
 	changed, _, err := runHTMLPass(l, htmlStr, baseDir, outputFilename, auxPath, "", opts)
 	if err != nil {
@@ -921,8 +971,7 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if err := os.WriteFile(auxPath, curBytes, 0644); err != nil {
 		return false, "", fmt.Errorf("%w: writing aux file: %s", errkind.IO, err.Error())
 	}
-	oldBytes, _ := json.MarshalIndent(oldAux, "", "  ")
-	changed := !bytes.Equal(oldBytes, curBytes)
+	changed := needsAnotherPass(oldAux, curAux, cb.PreviousPassReads(), ranUserLua(l))
 
 	if opts.Result != nil {
 		opts.Result.Pages = len(fe.Doc.Pages)
