@@ -1,0 +1,54 @@
+name: Accessibility
+# Renders the golden fixtures and the pdfua template as PDF/UA-1 and
+# PDF/UA-2 and checks them with pdfa11y, so a change in the tagging
+# pipeline that breaks the structure tree, alt text, language or metadata
+# turns CI red. The golden tests compare pixels and bytes, not tags.
+# pdfa11y is pinned so that a new check in a later version does not turn
+# CI red unexpectedly; bump it deliberately.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pdfua:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Build glu
+        run: go build -o bin/glu ./glu
+
+      - name: Install pdfa11y
+        run: go install github.com/speedata/pdfa11y/cmd/pdfa11y@v0.0.15
+
+      # --format applies only where the frontmatter sets no format, so the
+      # pdfua template (format: PDF/UA) is PDF/UA-1 in both passes.
+      # pdfa11y reads pdfuaid:part from each file and picks the rule set.
+      - name: Render test documents as PDF/UA-1 and PDF/UA-2
+        shell: bash
+        run: |
+          for format in PDF/UA PDF/UA-2; do
+            dir="out/a11y/${format//\//-}"
+            mkdir -p "$dir"
+            for f in testdata/golden/*/input.* glu/templates/pdfua/index.md; do
+              name=$(basename "$(dirname "$f")")
+              ./bin/glu -q --format "$format" -o "$dir/$name.pdf" "$f"
+            done
+          done
+
+      - name: Check with pdfa11y
+        run: pdfa11y --format github out/a11y/*/*.pdf
+
+      - name: Upload PDFs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: a11y-pdfs
+          path: out/a11y/
