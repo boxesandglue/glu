@@ -227,3 +227,25 @@ func TestLeftRightFences(t *testing.T) {
 		}
 	}
 }
+
+// TestStyleAndSpacingCommands covers glu#8: \displaystyle and \textstyle set
+// the rest of their group in an mstyle, and the spacing commands become
+// mspace elements instead of words or nothing.
+func TestStyleAndSpacingCommands(t *testing.T) {
+	for _, c := range []struct{ tex, want string }{
+		{`\displaystyle x`, `<math><mstyle displaystyle="true"><mi>x</mi></mstyle></math>`},
+		{`a {\textstyle b} c`, `<math><mrow><mi>a</mi><mstyle displaystyle="false"><mi>b</mi></mstyle><mi>c</mi></mrow></math>`},
+		{`a\quad b`, `<math><mrow><mi>a</mi><mspace width="1em"/><mi>b</mi></mrow></math>`},
+		{`a\qquad b`, `<math><mrow><mi>a</mi><mspace width="2em"/><mi>b</mi></mrow></math>`},
+		{`a\,b\:c\;d\!e`, `<math><mrow><mi>a</mi><mspace width="0.1667em"/><mi>b</mi><mspace width="0.2222em"/><mi>c</mi><mspace width="0.2778em"/><mi>d</mi><mspace width="-0.1667em"/><mi>e</mi></mrow></math>`},
+		{`\frac\displaystyle12`, `<math><mrow><mfrac><mrow></mrow><mn>1</mn></mfrac><mn>2</mn></mrow></math>`},
+	} {
+		got, err := ToMathML(c.tex, false)
+		if err != nil {
+			t.Fatalf("%s: %v", c.tex, err)
+		}
+		if got != c.want {
+			t.Errorf("%s:\n got %s\nwant %s", c.tex, got, c.want)
+		}
+	}
+}

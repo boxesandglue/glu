@@ -104,6 +104,15 @@ func (p *parser) parseList(topLevel bool) ([]string, error) {
 		if base == "" {
 			continue
 		}
+		// \displaystyle and \textstyle set the rest of the group.
+		if display, ok := styleSwitch(base); ok {
+			rest, err := p.parseList(topLevel)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, fmt.Sprintf(`<mstyle displaystyle="%t">`, display)+strings.Join(rest, "")+"</mstyle>")
+			break
+		}
 		base, err = p.parseScripts(base)
 		if err != nil {
 			return nil, err
@@ -237,7 +246,13 @@ func (p *parser) parseSingleToken() (string, error) {
 	case c == '{':
 		return p.parseAtomBase() // brace group handled there
 	case c == '\\':
-		return p.parseMacro()
+		m, err := p.parseMacro()
+		// A style command alone as an argument is an empty group, as in
+		// TeX: \frac\displaystyle12 is \frac{}{1}2.
+		if _, ok := styleSwitch(m); ok {
+			return "<mrow></mrow>", err
+		}
+		return m, err
 	case c >= '0' && c <= '9':
 		p.next()
 		return "<mn>" + string(c) + "</mn>", nil
@@ -301,7 +316,7 @@ func (p *parser) parseMacro() (string, error) {
 		c := p.next()
 		switch c {
 		case ' ', ',', ';', ':', '!':
-			return "", nil // spacing commands: no visual atom in this subset
+			return spaceCommands[string(c)], nil
 		case '{', '}', '%', '$', '#', '&', '_':
 			return "<mo>" + escapeXML(string(c)) + "</mo>", nil
 		default:
@@ -365,6 +380,12 @@ func (p *parser) parseMacro() (string, error) {
 			return p.parseMacro()
 		}
 		return "<mo>" + escapeXML(string(d)) + "</mo>", nil
+	case "quad", "qquad":
+		return spaceCommands[name], nil
+	case "displaystyle":
+		return displayStyleMark, nil
+	case "textstyle":
+		return textStyleMark, nil
 	case "mathrm", "mathbf", "mathit", "text", "operatorname", "mathsf", "mathtt":
 		// Take the group's textual content as one upright identifier. A
 		// multi-char <mi> is upright by MathML convention, which the reader
@@ -472,6 +493,39 @@ func (p *parser) readGroupText() string {
 // wrapRow returns a single MathML node for a list of atoms: the atom itself
 // when there is exactly one, an <mrow> wrapper for several, and an empty
 // <mrow/> for none (so a slot is never structurally absent).
+// spaceCommands are the TeX spacing commands as MathML spaces: \, \: \;
+// are 3, 4 and 5 eighteenths of an em, \! takes 3 back, "\ " is about a
+// word space.
+var spaceCommands = map[string]string{
+	",":     `<mspace width="0.1667em"/>`,
+	":":     `<mspace width="0.2222em"/>`,
+	";":     `<mspace width="0.2778em"/>`,
+	"!":     `<mspace width="-0.1667em"/>`,
+	" ":     `<mspace width="0.25em"/>`,
+	"quad":  `<mspace width="1em"/>`,
+	"qquad": `<mspace width="2em"/>`,
+}
+
+// The marks parseMacro returns for \displaystyle and \textstyle, which
+// parseList turns into an <mstyle> around the rest of the group. They
+// cannot occur in MathML text.
+const (
+	displayStyleMark = "\x00displaystyle"
+	textStyleMark    = "\x00textstyle"
+)
+
+// styleSwitch reports whether s is the mark of a style command, and of
+// which style.
+func styleSwitch(s string) (display, ok bool) {
+	switch s {
+	case displayStyleMark:
+		return true, true
+	case textStyleMark:
+		return false, true
+	}
+	return false, false
+}
+
 func wrapRow(items []string) string {
 	switch len(items) {
 	case 0:
