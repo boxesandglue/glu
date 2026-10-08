@@ -416,6 +416,8 @@ var mdExtensionDefaults = map[string]bool{
 	"smart":            false,
 	"auto_identifiers": false,
 	"tex_math_dollars": false,
+	"superscript":      false,
+	"subscript":        false,
 }
 
 // resolveExtensions merges the frontmatter "extensions" list into the
@@ -519,6 +521,12 @@ func markdownToHTML(body string, fm Frontmatter) (string, error) {
 	}
 	if exts["smart"] {
 		extensions = append(extensions, newTypographer(fm.Lang))
+	}
+	if exts["superscript"] {
+		extensions = append(extensions, mdext.Superscripts)
+	}
+	if exts["subscript"] {
+		extensions = append(extensions, mdext.Subscripts)
 	}
 	// Dollar-math parsing ($…$ inline, $$…$$ display → MathML) stays
 	// off by default so a document that uses $ as a currency sign is

@@ -273,3 +273,24 @@ func TestAutoIdentifiers(t *testing.T) {
 		t.Errorf("explicit id overridden: %s", got)
 	}
 }
+
+// pandoc's superscript and subscript are opt-in: 2^10^ and H~2~O, the text
+// without spaces; ~~text~~ stays strikethrough, and so does GFM's ~text~
+// with a space in it.
+func TestSuperscriptSubscriptExtensions(t *testing.T) {
+	body := "2^10^ and H~2~O, ~~struck~~, a^b c^ and x~y z~.\n"
+	got := mustHTML(t, body, Frontmatter{Extensions: ExtensionList{"superscript", "subscript"}})
+	for _, want := range []string{"2<sup>10</sup>", "H<sub>2</sub>O", "<del>struck</del>", "a^b c^"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %s", want, got)
+		}
+	}
+	// With a space inside, ~y z~ is no subscript; GFM strikes it through.
+	if strings.Contains(got, "<sub>y z</sub>") {
+		t.Errorf("a subscript with a space: %s", got)
+	}
+	got = mustHTML(t, body, Frontmatter{})
+	if strings.Contains(got, "<sup>") || strings.Contains(got, "<sub>") {
+		t.Errorf("superscript or subscript on by default: %s", got)
+	}
+}

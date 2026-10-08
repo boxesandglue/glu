@@ -232,6 +232,13 @@ extensions: smart, auto_identifiers, -footnotes
 |  tex_math_dollars
 :  off
 :  *$...$* inline and *$$...$$* display math rendered via MathML.
+|  superscript
+:  off
+:  *2^10^* becomes a superscript; no spaces between the carets.
+|  subscript
+:  off
+:  *H~2~O* becomes a subscript; no spaces between the tildes,
+   *~~text~~* stays strikethrough.
 
 The defaults are chosen so that existing documents render unchanged:
 default-on extensions use syntax that plain documents cannot contain,
