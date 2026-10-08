@@ -166,3 +166,11 @@ h4 { -bag-bookmark: 3 closed; }
 h5 { -bag-bookmark: 4 closed; }
 h6 { -bag-bookmark: 5 closed; }
 `
+
+// markdownFootnoteCSS is loaded on top of defaultCSS in Markdown mode only.
+// A Markdown footnote becomes <span class="footnote"> at the place of its
+// reference, which htmlbag sets at the foot of the page; the note is set
+// as small as the endnotes. HTML keeps htmlbag's size for .footnote.
+const markdownFootnoteCSS = `
+span.footnote { font-size: 0.85em; }
+`

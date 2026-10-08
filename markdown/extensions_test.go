@@ -171,6 +171,55 @@ func TestFootnotesExtension(t *testing.T) {
 	}
 }
 
+// A Markdown footnote is a page footnote by default: the note takes the
+// place of its reference as <span class="footnote">, which htmlbag sets at
+// the foot of the page, and the endnote list goes away.
+func TestFootnotesOnThePage(t *testing.T) {
+	cases := []struct {
+		name, body, want string
+	}{
+		{"plain", "Text.[^a]\n\n[^a]: The *note*.\n",
+			`<p>Text.<span class="footnote">The <em>note</em>.</span></p>`},
+		{"two paragraphs", "Text.[^a]\n\n[^a]: One.\n\n    Two.\n",
+			`<p>Text.<span class="footnote">One.<br>Two.</span></p>`},
+		{"referenced twice", "A.[^a] B.[^a]\n\n[^a]: Note.\n",
+			`<p>A.<span class="footnote">Note.</span> B.<span class="footnote">Note.</span></p>`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := mustHTML(t, c.body, Frontmatter{})
+			if !strings.Contains(got, c.want) {
+				t.Errorf("got %s, want %s", got, c.want)
+			}
+			if strings.Contains(got, "footnotes") || strings.Contains(got, "footnote-ref") {
+				t.Errorf("endnote parts left over: %s", got)
+			}
+		})
+	}
+}
+
+// footnotes: end keeps goldmark's endnotes, and so does a note that holds a
+// block a page footnote cannot take.
+func TestFootnotesAtTheEnd(t *testing.T) {
+	for name, c := range map[string]struct {
+		body string
+		fm   Frontmatter
+	}{
+		"footnotes: end": {"Text.[^a]\n\n[^a]: Note.\n", Frontmatter{Footnotes: "end"}},
+		"list in a note": {"Text.[^a]\n\n[^a]: Note.\n\n    - item\n", Frontmatter{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := mustHTML(t, c.body, c.fm)
+			if !strings.Contains(got, `class="footnotes"`) || strings.Contains(got, `<span class="footnote">`) {
+				t.Errorf("not set as endnotes: %s", got)
+			}
+		})
+	}
+	if _, err := markdownToHTML("Text.\n", Frontmatter{Footnotes: "bottom"}); err == nil {
+		t.Error("footnotes: bottom is accepted")
+	}
+}
+
 func TestDefinitionListsExtension(t *testing.T) {
 	body := "Term\n: The definition.\n"
 	got := mustHTML(t, body, Frontmatter{})

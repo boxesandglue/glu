@@ -20,8 +20,8 @@ import (
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/frontend"
 	"github.com/boxesandglue/htmlbag"
-	"github.com/speedata/go-lua"
 	attributes "github.com/mdigger/goldmark-attributes"
+	"github.com/speedata/go-lua"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
@@ -399,7 +399,7 @@ func runMarkdownPass(l *lua.State, filename, sourceDir, body string, fm Frontmat
 	if err != nil {
 		return false, "", err
 	}
-	return renderHTMLToPDF(l, htmlStr, sourceDir, outputFilename, auxPath, fm, opts, markdownOutlineCSS, oldAux)
+	return renderHTMLToPDF(l, htmlStr, sourceDir, outputFilename, auxPath, fm, opts, markdownOutlineCSS+markdownFootnoteCSS, oldAux)
 }
 
 // mdExtensionDefaults maps the user-facing Markdown extension names
@@ -506,6 +506,13 @@ func markdownToHTML(body string, fm Frontmatter) (string, error) {
 	}
 	if exts["footnotes"] {
 		extensions = append(extensions, extension.Footnote)
+		switch fm.Footnotes {
+		case "", "page":
+			extensions = append(extensions, mdext.PageFootnotes())
+		case "end":
+		default:
+			return "", fmt.Errorf("%w: frontmatter footnotes: %q is neither page nor end", errkind.Typeset, fm.Footnotes)
+		}
 	}
 	if exts["definition_lists"] {
 		extensions = append(extensions, extension.DefinitionList)
@@ -772,7 +779,8 @@ func applyTraces(fe *frontend.Document, cb *htmlbag.CSSBuilder, names []string) 
 // own <style>/<link> layers on top and the page is initialised
 // lazily so inline @page rules take effect. extraCSS is loaded
 // between the default stylesheet and the author layers; the Markdown
-// path passes markdownOutlineCSS, the HTML path passes "".
+// path passes markdownOutlineCSS and markdownFootnoteCSS, the HTML path
+// passes "".
 func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath string, fm Frontmatter, opts Options, extraCSS string, oldAux map[string]any) (bool, string, error) {
 	fe, err := frontend.New(outputFilename)
 	if err != nil {

@@ -9,21 +9,25 @@ import (
 
 // Frontmatter holds metadata extracted from the YAML front matter block.
 type Frontmatter struct {
-	Title       string           `yaml:"title"`
-	Author      string           `yaml:"author"`
-	CSS         string           `yaml:"css"`
-	Papersize   string           `yaml:"papersize"`
-	Format      string           `yaml:"format"`
-	Lang        string           `yaml:"lang"`
-	Math        bool             `yaml:"math"`
-	Extensions  ExtensionList    `yaml:"extensions"`
+	Title      string        `yaml:"title"`
+	Author     string        `yaml:"author"`
+	CSS        string        `yaml:"css"`
+	Papersize  string        `yaml:"papersize"`
+	Format     string        `yaml:"format"`
+	Lang       string        `yaml:"lang"`
+	Math       bool          `yaml:"math"`
+	Extensions ExtensionList `yaml:"extensions"`
+	// Footnotes places the notes of the footnotes extension: "page" (the
+	// default, "" too) at the foot of the page, "end" collected at the end
+	// of the document.
+	Footnotes   string           `yaml:"footnotes"`
 	Attachments []AttachmentSpec `yaml:"attachments"`
 	// Trace lists debug overlay switches (boxmodel, dests, hboxes,
 	// hyperlinks), the glu counterpart of xts' <Trace> element. Accepts
 	// the same list syntax as extensions (scalar or YAML sequence) and is
 	// combined with the --trace CLI flag.
-	Trace ExtensionList `yaml:"trace"`
-	Extra       map[string]any   `yaml:"-"` // all key-value pairs (including the known ones)
+	Trace ExtensionList  `yaml:"trace"`
+	Extra map[string]any `yaml:"-"` // all key-value pairs (including the known ones)
 }
 
 // ExtensionList is the value of the "extensions" frontmatter key: Markdown

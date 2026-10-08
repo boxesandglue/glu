@@ -181,6 +181,9 @@ Markdown mode reads YAML front matter between two *---* lines:
 :  chroma highlight name (default *github*)
 |  extensions
 :  Markdown extension list, see _MARKDOWN EXTENSIONS_
+|  footnotes
+:  *page* (default) sets each note at the foot of its page, *end*
+   collects the notes at the end of the document
 |  math
 :  *true* is the legacy spelling of *extensions: tex_math_dollars*
 |  attachments
@@ -212,8 +215,8 @@ extensions: smart, auto_identifiers, -footnotes
    e.g. for language changes or styling mid-paragraph.
 |  footnotes
 :  on
-:  *[^1]* references with *[^1]: text* definitions; notes are
-   collected in an endnote block at the end of the document.
+:  *[^1]* references with *[^1]: text* definitions; notes are set
+   at the foot of the page, or at the end with *footnotes: end*.
 |  definition_lists
 :  on
 :  a *: definition* line after a term paragraph builds dl/dt/dd.
