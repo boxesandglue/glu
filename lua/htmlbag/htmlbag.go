@@ -25,14 +25,16 @@ import (
 //   - a string: treated as base_dir for resolving relative CSS paths
 //     (e.g. <link rel="stylesheet" href="…">) inside the HTML payload;
 //
-//   - a table: an options dict with the following recognised keys:
+//   - a table: an options dict.
 //
-//     base_dir = "."          -- relative CSS path root
-//     format   = "PDF/UA"     -- PDF conformance level
-//     lang     = "en-US"      -- BCP47, written to PDF /Lang
-//     title    = "Showcase"   -- PDF /Title (also XMP dc:title)
-//     trace    = "boxmodel"   -- debug overlays, comma-separated
-//                             -- (boxmodel, dests, hboxes, hyperlinks)
+// The options table recognizes these keys:
+//
+//	base_dir = "."          -- relative CSS path root
+//	format   = "PDF/UA"     -- PDF conformance level
+//	lang     = "en-US"      -- BCP47, written to PDF /Lang
+//	title    = "Showcase"   -- PDF /Title (also XMP dc:title)
+//	trace    = "boxmodel"   -- debug overlays, comma-separated
+//	                        -- (boxmodel, dests, hboxes, hyperlinks)
 //
 // Unknown keys are silently ignored. base_dir defaults to ".".
 func luaRender(l *lua.State) int {
