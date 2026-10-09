@@ -11,7 +11,7 @@ require (
 	github.com/boxesandglue/textshape v0.0.18
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/mdigger/goldmark-attributes v0.0.0-20250724115859-bd3108091530
-	github.com/speedata/cxpath v0.0.9
+	github.com/speedata/cxpath v0.0.14
 	github.com/speedata/go-lua v0.1.10
 	github.com/speedata/optionparser v1.2.1
 	github.com/yuin/goldmark v1.7.16
@@ -30,11 +30,11 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/speedata/barcode v1.1.1 // indirect
 	github.com/speedata/css v1.0.5 // indirect
-	github.com/speedata/goxml v1.0.9 // indirect
-	github.com/speedata/goxpath v1.0.12 // indirect
+	github.com/speedata/goxml v1.0.12 // indirect
+	github.com/speedata/goxpath v1.0.22 // indirect
 	github.com/speedata/hyphenation v1.0.3 // indirect
 	github.com/speedata/pdfdisassembler v0.0.7 // indirect
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 )
