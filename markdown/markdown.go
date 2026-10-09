@@ -413,6 +413,7 @@ var mdExtensionDefaults = map[string]bool{
 	"bracketed_spans":  true,
 	"footnotes":        true,
 	"definition_lists": true,
+	"table_captions":   true,
 	"smart":            false,
 	"auto_identifiers": false,
 	"tex_math_dollars": false,
@@ -518,6 +519,9 @@ func markdownToHTML(body string, fm Frontmatter) (string, error) {
 	}
 	if exts["definition_lists"] {
 		extensions = append(extensions, extension.DefinitionList)
+	}
+	if exts["table_captions"] {
+		extensions = append(extensions, mdext.TableCaptions)
 	}
 	if exts["smart"] {
 		extensions = append(extensions, newTypographer(fm.Lang))

@@ -294,3 +294,50 @@ func TestSuperscriptSubscriptExtensions(t *testing.T) {
 		t.Errorf("superscript or subscript on by default: %s", got)
 	}
 }
+
+// pandoc's table_captions: a "Table:" or ":" paragraph after or before a
+// table becomes its caption, an attribute line below the caption goes to
+// the table.
+func TestTableCaptions(t *testing.T) {
+	table := "| a | b |\n|---|---|\n| 1 | 2 |\n"
+	cases := []struct {
+		name, body, want string
+	}{
+		{"after", table + "\nTable: The *values*.\n", "<table>\n<caption>The <em>values</em>.</caption>\n<thead>"},
+		{"before", ": The values.\n\n" + table, "<table>\n<caption>The values.</caption>\n<thead>"},
+		{"lowercase, two lines", table + "\ntable:\nThe values.\n", "<table>\n<caption>The values.</caption>"},
+		{"id at table", table + "{#tab-1}\n\nTable: The values.\n", `<table id="tab-1">` + "\n<caption>The values.</caption>"},
+		{"id at caption", "Table: The values.\n{#tab-1 .wide}\n\n" + table, `<table id="tab-1" class="wide">` + "\n<caption>The values.</caption>"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := mustHTML(t, c.body, Frontmatter{})
+			if !strings.Contains(got, c.want) {
+				t.Errorf("missing %q in %s", c.want, got)
+			}
+			if strings.Contains(got, "<p>") {
+				t.Errorf("caption paragraph left over: %s", got)
+			}
+		})
+	}
+
+	// After wins over before; a caption is taken once.
+	got := mustHTML(t, table+"\nTable: first\n\n"+table, Frontmatter{})
+	if strings.Count(got, "<caption>") != 1 || !strings.Contains(got, "<caption>first</caption>") {
+		t.Errorf("caption between two tables: %s", got)
+	}
+
+	// No caption: away from a table, without a space, switched off.
+	for _, body := range []string{
+		"Table: not next to a table.\n",
+		table + "\nTable:x\n",
+	} {
+		if got := mustHTML(t, body, Frontmatter{}); strings.Contains(got, "<caption>") {
+			t.Errorf("unexpected caption: %s", got)
+		}
+	}
+	got = mustHTML(t, table+"\nTable: The values.\n", Frontmatter{Extensions: ExtensionList{"-table_captions"}})
+	if strings.Contains(got, "<caption>") {
+		t.Errorf("caption with -table_captions: %s", got)
+	}
+}
