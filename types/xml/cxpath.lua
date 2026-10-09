@@ -7,63 +7,41 @@
 -- Types
 --------------------------------------------------------------------------------
 
----An XML element node
----@class XMLElement
----@field name string Element name (local name)
----@field prefix string Namespace prefix
----@field namespace string Namespace URI
----@field attributes table<string, string> Element attributes
----@field children XMLNode[] Child nodes
-local XMLElement = {}
-
----Get attribute value
----@param name string Attribute name
----@return string?
-function XMLElement:get_attribute(name) end
-
----Get text content
----@return string
-function XMLElement:text() end
-
----An XML text node
----@class XMLText
----@field content string Text content
-
----An XML comment node
----@class XMLComment
----@field content string Comment content
-
----Any XML node type
----@alias XMLNode XMLElement|XMLText|XMLComment
-
----An XPath context for evaluating expressions
+---An XPath context: the document, or the result of an evaluation (a node,
+---a sequence of nodes or an atomic value). Every query runs relative to it.
 ---@class XPathContext
+---@field string string String value of the context (read-only)
 local XPathContext = {}
 
----Evaluate an XPath expression
----@param xpath string XPath expression
----@return XMLNode[] nodes Matching nodes
-function XPathContext:query(xpath) end
+---Register a namespace prefix for XPath expressions. The prefix `xml` is
+---predeclared.
+---@param prefix string Namespace prefix
+---@param uri string Namespace URI
+---@return XPathContext self The same context, for chaining
+function XPathContext:set_namespace(prefix, uri) end
 
----Evaluate an XPath expression and return first match
+---Evaluate an XPath expression relative to this context. Raises an error
+---on an invalid expression.
 ---@param xpath string XPath expression
----@return XMLNode? node First matching node
-function XPathContext:query_first(xpath) end
+---@return XPathContext result Context holding the result
+function XPathContext:eval(xpath) end
 
----Evaluate an XPath expression and return string value
+---Iterate over the items an XPath expression selects, in document order.
 ---@param xpath string XPath expression
----@return string
-function XPathContext:string(xpath) end
+---@return fun(): XPathContext? iterator Yields one context per item
+function XPathContext:each(xpath) end
 
----Evaluate an XPath expression and return number value
----@param xpath string XPath expression
----@return number
-function XPathContext:number(xpath) end
+---Get the root element of the document.
+---@return XPathContext root
+function XPathContext:root() end
 
----Evaluate an XPath expression and return boolean value
----@param xpath string XPath expression
+---Get the value of this context as an integer.
+---@return integer
+function XPathContext:int() end
+
+---Get the value of this context as a boolean.
 ---@return boolean
-function XPathContext:boolean(xpath) end
+function XPathContext:bool() end
 
 --------------------------------------------------------------------------------
 -- xml.cxpath module
@@ -73,25 +51,10 @@ function XPathContext:boolean(xpath) end
 ---@class xml.cxpath
 local cxpath = {}
 
----Parse XML from a string
----@param xml string XML content
----@return XMLElement root Root element
-function cxpath.parse(xml) end
-
----Parse XML from a file
+---Open and parse an XML file. Raises an error if the file cannot be read or
+---parsed.
 ---@param filename string Path to XML file
----@return XMLElement root Root element
-function cxpath.parse_file(filename) end
-
----Create an XPath context from an element
----@param element XMLElement Root element
----@return XPathContext
-function cxpath.context(element) end
-
----Register a namespace for XPath queries
----@param ctx XPathContext XPath context
----@param prefix string Namespace prefix
----@param uri string Namespace URI
-function cxpath.register_namespace(ctx, prefix, uri) end
+---@return XPathContext doc Context of the document
+function cxpath.open(filename) end
 
 return cxpath

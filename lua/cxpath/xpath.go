@@ -168,7 +168,7 @@ func registerContextMetaTable(l *lua.State) {
 	l.Pop(1)
 }
 
-// openCXPath creates the cxpath module table for require("glu.cxpath")
+// openCXPath creates the cxpath module table for require("xml.cxpath")
 func openCXPath(l *lua.State) int {
 	registerContextMetaTable(l)
 
