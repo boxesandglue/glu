@@ -20,7 +20,7 @@
       {
         packages.default = pkgs.buildGoModule rec {
           pname = "glu";
-          version = "0.0.45";
+          version = "0.0.46";
           src = self;
           vendorHash = "sha256-Gi9g+s77Npabw+OmRBcMOhEsAEHC7CtEiElV0OLoU44=";
           subPackages = [ "glu" ];
