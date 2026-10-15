@@ -1,4 +1,4 @@
-[![Explore in Constellation](https://img.shields.io/badge/Explore%20in-Constellation-blue)](https://constellation.speedata.de) [![Homepage](https://img.shields.io/badge/homepage-boxesandglue.dev-blue)](https://boxesandglue.dev/glu)
+[![Explore in Constellation](https://img.shields.io/badge/Explore%20in-Constellation-blue)](https://constellation.speedata.de/#glu) [![Homepage](https://img.shields.io/badge/homepage-boxesandglue.dev-blue)](https://boxesandglue.dev/glu)
 
 # glu
 
@@ -10,6 +10,14 @@ glu turns Markdown into beautifully typeset PDFs — with real line breaking, hy
 ```bash
 glu document.md        # → document.pdf
 ```
+
+<p align="center">
+  <a href="https://github.com/boxesandglue/boxesandglue-examples/tree/main/glu/markdown/scientific-paper">
+    <img src="https://raw.githubusercontent.com/boxesandglue/boxesandglue-examples/main/glu/markdown/scientific-paper/firstpage.png" width="320" alt="Two-column scientific paper with equations and figures, made by glu from Markdown">
+  </a>
+</p>
+
+More examples, each with its source and the resulting PDF, are in the [boxesandglue-examples repository](https://github.com/boxesandglue/boxesandglue-examples).
 
 
 ## What makes glu different?
@@ -50,14 +58,18 @@ Full documentation: **[boxesandglue.dev/glu](https://boxesandglue.dev/glu)**
 
 ## Installation
 
+With Homebrew (macOS and Linux):
+
 ```bash
-rake build      # creates bin/glu
+brew install boxesandglue/tap/glu
 ```
+
+Binaries for macOS, Linux and Windows are on the [releases page](https://github.com/boxesandglue/glu/releases/latest). The [manual](https://boxesandglue.dev/glu/#installation) also describes how to build glu from source.
 
 ## Ecosystem
 
 glu is part of a broader ecosystem of PDF, typesetting and publishing technologies.
-**[Explore the constellation →](https://constellation.speedata.de)**
+**[Explore the constellation →](https://constellation.speedata.de/#glu)**
 
 ## License
 
