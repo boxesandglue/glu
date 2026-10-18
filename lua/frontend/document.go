@@ -335,11 +335,20 @@ func documentAttachFile(l *lua.State) int {
 	}
 	l.Pop(1)
 
+	// Get afrelationship (optional, empty means Alternative)
+	l.Field(2, "afrelationship")
+	afrel := ""
+	if !l.IsNil(-1) {
+		afrel = lua.CheckString(l, -1)
+	}
+	l.Pop(1)
+
 	attachment := document.Attachment{
-		Name:        name,
-		Description: description,
-		MimeType:    mimetype,
-		Data:        data,
+		Name:           name,
+		Description:    description,
+		MimeType:       mimetype,
+		Data:           data,
+		AFRelationship: afrel,
 	}
 
 	d.Value.Doc.AttachFile(attachment)

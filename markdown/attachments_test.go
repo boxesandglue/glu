@@ -49,7 +49,7 @@ func TestApplyAttachments(t *testing.T) {
 	fe := newTestFrontend(t)
 	specs := []AttachmentSpec{
 		{File: "a.txt", Description: "first"},
-		{File: "data.json", Name: "payload.json", MimeType: "application/json"},
+		{File: "data.json", Name: "payload.json", MimeType: "application/json", AFRelationship: "Data"},
 	}
 	if err := applyAttachments(fe, dir, specs); err != nil {
 		t.Fatalf("applyAttachments: %v", err)
@@ -62,7 +62,7 @@ func TestApplyAttachments(t *testing.T) {
 		t.Errorf("attachment[0] defaults wrong: %+v", a0)
 	}
 	a1 := fe.Doc.Attachments[1]
-	if a1.Name != "payload.json" || a1.MimeType != "application/json" {
+	if a1.Name != "payload.json" || a1.MimeType != "application/json" || a1.AFRelationship != "Data" {
 		t.Errorf("attachment[1] override wrong: %+v", a1)
 	}
 }

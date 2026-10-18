@@ -34,10 +34,11 @@ func applyAttachments(fe *frontend.Document, sourceDir string, attachments []Att
 			mime = "application/octet-stream"
 		}
 		fe.Doc.AttachFile(document.Attachment{
-			Name:        name,
-			Description: spec.Description,
-			MimeType:    mime,
-			Data:        data,
+			Name:           name,
+			Description:    spec.Description,
+			MimeType:       mime,
+			Data:           data,
+			AFRelationship: spec.AFRelationship,
 		})
 	}
 	return nil

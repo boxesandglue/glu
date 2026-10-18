@@ -190,6 +190,7 @@ function Document:finish() end
 ---@field name? string Visible name
 ---@field description? string File description
 ---@field mimetype? string MIME type
+---@field afrelationship? string /AFRelationship: "Alternative" (default), "Data", "Source", "Supplement" or "Unspecified"
 
 --------------------------------------------------------------------------------
 -- Page

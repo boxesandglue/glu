@@ -78,6 +78,9 @@ type AttachmentSpec struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 	MimeType    string `yaml:"mimetype"`
+	// AFRelationship is the attachment's /AFRelationship, empty for
+	// Alternative.
+	AFRelationship string `yaml:"afrelationship"`
 }
 
 // ExtractFrontmatter separates YAML front matter from the Markdown body.

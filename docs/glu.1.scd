@@ -188,7 +188,7 @@ Markdown mode reads YAML front matter between two *---* lines:
 :  *true* is the legacy spelling of *extensions: tex_math_dollars*
 |  attachments
 :  list of files to embed, each with _file_ and optional _name_,
-   _description_, _mimetype_
+   _description_, _mimetype_, _afrelationship_ (default *Alternative*)
 
 # MARKDOWN EXTENSIONS
 
