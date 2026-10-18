@@ -51,6 +51,8 @@ function frontend.text(settings) end
 ---@field leader? string Leader pattern (e.g. " . ") repeated to fill the line, for contents lines
 ---@field tab_stops? (Dimension|string|TabStop)[] Tab stops; a plain position is a left stop
 ---@field tabstops? (Dimension|TabStop)[] Tab stops (alias)
+---@field horizontal_scale? number Factor for the glyph widths of the run, 0.9 draws them at 90%; greater than 0
+---@field font_expansion? number Share a glyph may be stretched or shrunk to fill a line, 0.05 is 5%, 0 turns it off; 0 to 1
 
 ---A tab stop. A tab advances to the first stop past the text before it.
 ---@class TabStop
@@ -264,6 +266,8 @@ function Text:apply(tbl) end
 ---@field leader string Leader pattern (e.g. " . ") repeated to fill the line
 ---@field tab_stops (Dimension|TabStop)[] Tab stops; reads back as a list of TabStop tables
 ---@field tabstops (Dimension|TabStop)[] Tab stops (alias)
+---@field horizontal_scale number Factor for the glyph widths of the run, 0.9 draws them at 90%; greater than 0
+---@field font_expansion number Share a glyph may be stretched or shrunk to fill a line, 0.05 is 5%, 0 turns it off; 0 to 1
 
 --------------------------------------------------------------------------------
 -- FontFamily and FontSource
@@ -339,6 +343,10 @@ function Table:new_row() end
 
 ---A table row
 ---@class TableRow
+---@field min_height Dimension Least height of the row; it grows to fit its cells
+---@field fixed_height Dimension Exact height of the row when not 0; content that does not fit is drawn past it, and the row never breaks inside
+---@field valign "top"|"middle"|"bottom"|"default" Default vertical alignment of the row's cells ("center" is accepted as "middle")
+---@field break_inside boolean Whether the row may break across pages or frames
 local TableRow = {}
 
 ---Add a new cell

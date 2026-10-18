@@ -58,7 +58,7 @@
 ---@field list Node? First node in list
 ---@field glue_set number Glue ratio (stretch/shrink)
 ---@field glue_sign integer 0=normal, 1=stretch, 2=shrink
----@field glue_order integer Infinity level
+---@field glue_order integer Order of the glue that was stretched or shrunk to set the list: 0=normal, 1=fil, 2=fill, 3=filll
 ---@field shift integer Vertical shift in scaled points
 ---@field badness integer Line badness
 
@@ -74,10 +74,10 @@
 
 ---A discretionary break node for hyphenation
 ---@class DiscNode: Node
----@field pre Node? Nodes before break
----@field post Node? Nodes after break
----@field replace Node? Replacement if no break
----@field penalty integer Additional penalty
+---@field pre Node? Nodes that end the line when it breaks here (the hyphen)
+---@field post Node? Nodes that start the next line when it breaks here
+---@field replace Node? Not used by the line breaker
+---@field penalty integer Added to the hyphen penalty; a sum of 10000 or more forbids the break
 
 ---An image node
 ---@class ImageNodeBackend: Node

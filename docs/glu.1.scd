@@ -220,6 +220,11 @@ extensions: smart, auto_identifiers, -footnotes
 |  definition_lists
 :  on
 :  a *: definition* line after a term paragraph builds dl/dt/dd.
+|  table_captions
+:  on
+:  a paragraph starting with *Table:* or *:* directly after or before
+   a pipe table becomes its caption, set above the table. Attributes
+   on the caption paragraph go to the table.
 |  smart
 :  off
 :  typographic quotes, dashes (*--*, *---*) and ellipsis. With
@@ -242,8 +247,8 @@ extensions: smart, auto_identifiers, -footnotes
 
 The defaults are chosen so that existing documents render unchanged:
 default-on extensions use syntax that plain documents cannot contain,
-while *smart* and *auto_identifiers* alter regular text or the
-identifier set and are opt-in.
+while *smart*, *superscript* and *subscript* alter regular text and
+*auto_identifiers* the identifier set, so they are opt-in.
 
 A *lang=* attribute on a div (or any block element) switches the
 hyphenation language for its content; in PDF/UA mode the switch is also
@@ -266,10 +271,15 @@ Forward references (page counts, headings, custom Lua state in the
 . runs the pipeline;
 . writes the new aux back.
 
-If the written aux differs from what was read, *glu* re-runs the
-pipeline with a fresh Lua state. Up to *--max-passes* iterations are
-attempted. Cycle detection: if aux content (SHA prefix) repeats,
-abort early with exit code 6.
+*glu* re-runs the pipeline with a fresh Lua state only when something
+the pass read has changed: the page count if *counter(pages)* was used,
+or an anchor that *target-counter()* or *target-text()* looked up. When
+user Lua ran (a companion script, a {lua} block or an inline
+expression), any change of the aux data counts, since the script may
+have read all of it. A document that uses none of these is done after
+one pass, also when it had no aux file yet. Up to *--max-passes*
+iterations are attempted. Cycle detection: if aux content (SHA prefix)
+repeats, abort early with exit code 6.
 
 # LIFECYCLE CALLBACKS
 
