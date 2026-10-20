@@ -42,10 +42,7 @@ func textNew(l *lua.State) int {
 		for l.Next(1) {
 			if l.IsString(-2) {
 				key, _ := l.ToString(-2)
-				settingType, value := parseSettingKeyValue(l, key, l.AbsIndex(-1))
-				if settingType != 0 {
-					te.Settings[settingType] = value
-				}
+				applySetting(l, te.Settings, key, l.AbsIndex(-1))
 			}
 			l.Pop(1)
 		}
@@ -82,10 +79,7 @@ func textSet(l *lua.State) int {
 		te.Value.Settings = make(frontend.TypesettingSettings)
 	}
 
-	settingType, value := parseSettingKeyValue(l, key, 3)
-	if settingType != 0 {
-		te.Value.Settings[settingType] = value
-	}
+	applySetting(l, te.Value.Settings, key, 3)
 
 	// Return self for chaining
 	l.PushValue(1)
@@ -109,10 +103,7 @@ func textSetSettings(l *lua.State) int {
 	for l.Next(2) {
 		if l.IsString(-2) {
 			key, _ := l.ToString(-2)
-			settingType, value := parseSettingKeyValue(l, key, l.AbsIndex(-1))
-			if settingType != 0 {
-				te.Value.Settings[settingType] = value
-			}
+			applySetting(l, te.Value.Settings, key, l.AbsIndex(-1))
 		}
 		l.Pop(1)
 	}
@@ -184,6 +175,12 @@ func textSettingsIndex(l *lua.State) int {
 		return 0
 	}
 
+	if line, ok := decorationLines[key]; ok {
+		lines, _ := ts.text.Settings[frontend.SettingTextDecorationLine].(frontend.TextDecorationLine)
+		l.PushBoolean(lines&line != 0)
+		return 1
+	}
+
 	// Look up the setting
 	settingType := settingKeyToType(key)
 	if settingType == 0 {
@@ -211,11 +208,40 @@ func textSettingsNewIndex(l *lua.State) int {
 		ts.text.Settings = make(frontend.TypesettingSettings)
 	}
 
-	settingType, value := parseSettingKeyValue(l, key, 3)
-	if settingType != 0 {
-		ts.text.Settings[settingType] = value
-	}
+	applySetting(l, ts.text.Settings, key, 3)
 	return 0
+}
+
+// decorationLines are the text settings that each switch one line of
+// SettingTextDecorationLine.
+var decorationLines = map[string]frontend.TextDecorationLine{
+	"underline":    frontend.TextDecorationUnderline,
+	"overline":     frontend.TextDecorationOverline,
+	"linethrough":  frontend.TextDecorationLineThrough,
+	"line_through": frontend.TextDecorationLineThrough,
+}
+
+// applySetting sets the setting key in settings from the value at
+// valueIndex. underline, overline and line_through switch their line in
+// the set of decoration lines, so that several can be on.
+func applySetting(l *lua.State, settings frontend.TypesettingSettings, key string, valueIndex int) {
+	if line, ok := decorationLines[key]; ok {
+		lines, _ := settings[frontend.SettingTextDecorationLine].(frontend.TextDecorationLine)
+		if l.ToBoolean(valueIndex) {
+			lines |= line
+		} else {
+			lines &^= line
+		}
+		if lines == frontend.TextDecorationLineNone {
+			delete(settings, frontend.SettingTextDecorationLine)
+		} else {
+			settings[frontend.SettingTextDecorationLine] = lines
+		}
+		return
+	}
+	if settingType, value := parseSettingKeyValue(l, key, valueIndex); settingType != 0 {
+		settings[settingType] = value
+	}
 }
 
 func settingKeyToType(key string) frontend.SettingType {
@@ -463,14 +489,6 @@ func parseSettingKeyValue(l *lua.State, key string, valueIndex int) (frontend.Se
 		if l.IsString(valueIndex) {
 			s, _ := l.ToString(valueIndex)
 			return frontend.SettingHyperlink, s
-		}
-	case "underline":
-		if l.ToBoolean(valueIndex) {
-			return frontend.SettingTextDecorationLine, frontend.TextDecorationUnderline
-		}
-	case "linethrough", "line_through":
-		if l.ToBoolean(valueIndex) {
-			return frontend.SettingTextDecorationLine, frontend.TextDecorationLineThrough
 		}
 	case "tabstops", "tab_stops":
 		return frontend.SettingTabStops, parseTabStops(l, valueIndex)

@@ -47,6 +47,7 @@ function frontend.text(settings) end
 ---@field background_color? string|Color Background color
 ---@field hyperlink? string URL for hyperlink
 ---@field underline? boolean Underline text
+---@field overline? boolean Line above the text
 ---@field line_through? boolean Strikethrough text
 ---@field leader? string Leader pattern (e.g. " . ") repeated to fill the line, for contents lines
 ---@field tab_stops? (Dimension|string|TabStop)[] Tab stops; a plain position is a left stop
@@ -299,6 +300,7 @@ function Text:apply(tbl) end
 ---@field background_color string|Color Background color
 ---@field hyperlink string URL for hyperlink
 ---@field underline boolean Underline text
+---@field overline boolean Line above the text
 ---@field line_through boolean Strikethrough text
 ---@field leader string Leader pattern (e.g. " . ") repeated to fill the line
 ---@field tab_stops (Dimension|TabStop)[] Tab stops; reads back as a list of TabStop tables
@@ -354,6 +356,8 @@ function FontFamily:add_member(source, weight, style) end
 ---@field width ScaledPoint Width of the VList
 ---@field height ScaledPoint Height of the VList
 ---@field depth ScaledPoint Depth of the VList
+---@field paint_last boolean Paint after everything else on the page, keeping the list's place
+---@field paint_last_scope boolean Paint the paint_last nodes inside right after this list, not at the end of the page
 
 --------------------------------------------------------------------------------
 -- Table

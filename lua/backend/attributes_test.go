@@ -29,3 +29,20 @@ assert(img.crop == nil)
 		}
 	}
 }
+
+func TestPaintLast(t *testing.T) {
+	err := runNode(t, `
+local vl = node.new("vlist")
+assert(vl.paint_last == false and vl.paint_last_scope == false)
+vl.paint_last, vl.paint_last_scope = true, true
+assert(vl.paint_last and vl.paint_last_scope)
+vl.paint_last = false
+assert(not vl.paint_last and vl.paint_last_scope)
+local r = node.new("rule")
+r.paint_last = true
+assert(r.paint_last)
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

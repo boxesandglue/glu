@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/boxesandglue/boxesandglue/backend/bag"
+	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/backend/node"
 	"github.com/boxesandglue/glu/lua/common"
 	"github.com/speedata/go-lua"
@@ -520,6 +521,9 @@ func ruleIndex(l *lua.State) int {
 	case "hide":
 		l.PushBoolean(r.Hide)
 		return 1
+	case "paint_last":
+		l.PushBoolean(common.HasFlag(r.Attributes, document.PaintLast))
+		return 1
 	}
 	return nodeGenericIndex(l, r)
 }
@@ -542,6 +546,8 @@ func ruleNewIndex(l *lua.State) int {
 		r.Post = lua.CheckString(l, 3)
 	case "hide":
 		r.Hide = l.ToBoolean(3)
+	case "paint_last":
+		common.SetFlag(&r.Attributes, document.PaintLast, l.ToBoolean(3))
 	default:
 		nodeGenericNewIndex(l, r)
 	}
@@ -642,6 +648,12 @@ func vlistIndex(l *lua.State) int {
 	case "shift_x":
 		l.PushInteger(int(v.ShiftX))
 		return 1
+	case "paint_last":
+		l.PushBoolean(common.HasFlag(v.Attributes, document.PaintLast))
+		return 1
+	case "paint_last_scope":
+		l.PushBoolean(common.HasFlag(v.Attributes, document.PaintLastScope))
+		return 1
 	}
 	return nodeGenericIndex(l, v)
 }
@@ -666,6 +678,10 @@ func vlistNewIndex(l *lua.State) int {
 		v.GlueSign = uint8(lua.CheckInteger(l, 3))
 	case "shift_x":
 		v.ShiftX = bag.ScaledPoint(lua.CheckInteger(l, 3))
+	case "paint_last":
+		common.SetFlag(&v.Attributes, document.PaintLast, l.ToBoolean(3))
+	case "paint_last_scope":
+		common.SetFlag(&v.Attributes, document.PaintLastScope, l.ToBoolean(3))
 	default:
 		nodeGenericNewIndex(l, v)
 	}

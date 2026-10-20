@@ -88,3 +88,29 @@ func TestTextSettingErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestTextDecorationLines(t *testing.T) {
+	te, err := runText(t, `
+t = frontend.text({ underline = true, line_through = true })
+assert(t.settings.underline and t.settings.line_through and not t.settings.overline)
+t:set("overline", true):set("underline", false)
+assert(not t.settings.underline and t.settings.overline)
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := frontend.TextDecorationOverline | frontend.TextDecorationLineThrough
+	if got := te.Settings[frontend.SettingTextDecorationLine]; got != want {
+		t.Errorf("decoration lines %v, want %v", got, want)
+	}
+	te, err = runText(t, `
+t = frontend.text({ underline = true })
+t.settings.underline = false
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := te.Settings[frontend.SettingTextDecorationLine]; ok {
+		t.Errorf("decoration lines %v, want none", v)
+	}
+}

@@ -3,6 +3,7 @@ package frontend
 import (
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/backend/node"
+	"github.com/boxesandglue/glu/lua/common"
 	"github.com/speedata/go-lua"
 )
 
@@ -66,8 +67,30 @@ func vlistIndex(l *lua.State) int {
 	case "set_artifact":
 		l.PushGoFunction(vlistSetArtifact)
 		return 1
+	case "paint_last":
+		l.PushBoolean(common.HasFlag(vl.Value.Attributes, document.PaintLast))
+		return 1
+	case "paint_last_scope":
+		l.PushBoolean(common.HasFlag(vl.Value.Attributes, document.PaintLastScope))
+		return 1
 	}
 
+	return 0
+}
+
+// vlistNewIndex handles attribute setting (__newindex metamethod)
+func vlistNewIndex(l *lua.State) int {
+	vl := checkVList(l, 1)
+	key := lua.CheckString(l, 2)
+
+	switch key {
+	case "paint_last":
+		common.SetFlag(&vl.Value.Attributes, document.PaintLast, l.ToBoolean(3))
+	case "paint_last_scope":
+		common.SetFlag(&vl.Value.Attributes, document.PaintLastScope, l.ToBoolean(3))
+	default:
+		lua.Errorf(l, "cannot set attribute %s on VList", key)
+	}
 	return 0
 }
 
@@ -76,6 +99,7 @@ func registerVListMetaTable(l *lua.State) {
 	lua.NewMetaTable(l, vlistMetaTable)
 	lua.SetFunctions(l, []lua.RegistryFunction{
 		{Name: "__index", Function: vlistIndex},
+		{Name: "__newindex", Function: vlistNewIndex},
 	}, 0)
 	l.Pop(1)
 }

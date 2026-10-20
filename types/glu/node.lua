@@ -49,6 +49,7 @@
 ---@field pre string PDF code before rule
 ---@field post string PDF code after rule
 ---@field hide boolean Don't draw the rectangle
+---@field paint_last boolean Paint after everything else on the page, keeping the rule's place
 
 ---A horizontal list node
 ---@class HListNode: Node
@@ -71,6 +72,8 @@
 ---@field glue_set number Glue ratio
 ---@field glue_sign integer 0=normal, 1=stretch, 2=shrink
 ---@field shift_x integer Horizontal shift in scaled points
+---@field paint_last boolean Paint after everything else on the page, keeping the list's place
+---@field paint_last_scope boolean Paint the paint_last nodes inside right after this list, not at the end of the page
 
 ---A discretionary break node for hyphenation
 ---@class DiscNode: Node
