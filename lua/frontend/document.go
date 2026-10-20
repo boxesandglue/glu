@@ -7,27 +7,50 @@ import (
 	"github.com/boxesandglue/boxesandglue/backend/document"
 	"github.com/boxesandglue/boxesandglue/backend/node"
 	"github.com/boxesandglue/boxesandglue/frontend"
+	"github.com/boxesandglue/glu/lua/common"
 	"github.com/boxesandglue/htmlbag"
+	"github.com/boxesandglue/svgreader"
 	"github.com/speedata/go-lua"
 )
 
-// documentCreateSVGNode creates an SVG node: doc:create_svg_node(svg_doc, width, height, [default_family])
+// documentCreateSVGNode creates an SVG node: doc:create_svg_node(svg_doc, width, height, [default_family | options])
 // If a FontFamily is provided as 5th argument, text elements in the SVG are
 // rendered using the document's font system with that family as fallback.
+// An options table takes the family as font_family and a crop region of the
+// SVG as crop.
 func documentCreateSVGNode(l *lua.State) int {
 	d := checkDocument(l, 1)
 	svgDoc := checkSVGDocument(l, 2)
 	width := checkDimension(l, 3)
 	height := optDimension(l, 4, 0)
 
-	var rule *node.Rule
-	if l.Top() >= 5 {
-		ff := checkFontFamily(l, 5)
+	var ff *FontFamily
+	var crop *node.ImageCrop
+	switch {
+	case l.IsNoneOrNil(5):
+	case l.IsTable(5):
+		l.Field(5, "font_family")
+		if !l.IsNil(-1) {
+			ff = checkFontFamily(l, -1)
+		}
+		l.Pop(1)
+		l.Field(5, "crop")
+		crop = common.ParseCrop(l, -1, "crop")
+		l.Pop(1)
+	default:
+		ff = checkFontFamily(l, 5)
+	}
+	var trs []svgreader.TextRenderer
+	if ff != nil {
 		tr := frontend.NewSVGTextRenderer(d.Value)
 		tr.DefaultFamily = ff.Value
-		rule = d.Value.Doc.CreateSVGNodeFromDocument(svgDoc.Value, width, height, tr)
+		trs = append(trs, tr)
+	}
+	var rule *node.Rule
+	if crop != nil {
+		rule = d.Value.Doc.CreateSVGNodeFromDocumentCrop(svgDoc.Value, *crop, width, height, trs...)
 	} else {
-		rule = d.Value.Doc.CreateSVGNodeFromDocument(svgDoc.Value, width, height)
+		rule = d.Value.Doc.CreateSVGNodeFromDocument(svgDoc.Value, width, height, trs...)
 	}
 
 	l.PushUserData(&SVGNode{Value: rule})

@@ -5,6 +5,7 @@ import (
 
 	"github.com/boxesandglue/boxesandglue/backend/bag"
 	"github.com/boxesandglue/boxesandglue/backend/node"
+	"github.com/boxesandglue/glu/lua/common"
 	"github.com/speedata/go-lua"
 )
 
@@ -738,6 +739,9 @@ func imageIndex(l *lua.State) int {
 	case "used":
 		l.PushBoolean(img.Used)
 		return 1
+	case "crop":
+		common.PushCrop(l, img.Crop)
+		return 1
 	}
 	return nodeGenericIndex(l, img)
 }
@@ -756,6 +760,8 @@ func imageNewIndex(l *lua.State) int {
 		img.PageNumber = lua.CheckInteger(l, 3)
 	case "used":
 		img.Used = l.ToBoolean(3)
+	case "crop":
+		img.Crop = common.ParseCrop(l, 3, key)
 	default:
 		nodeGenericNewIndex(l, img)
 	}

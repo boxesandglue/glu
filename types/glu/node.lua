@@ -86,6 +86,7 @@
 ---@field height integer Image height in scaled points
 ---@field page integer Page number (for PDFs)
 ---@field used boolean Already output
+---@field crop {x: number, y: number, width: number, height: number}? Region of the image to show, in the units of its natural size
 
 ---A language node
 ---@class LangNode: Node

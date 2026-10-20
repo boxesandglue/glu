@@ -4,6 +4,7 @@ import (
 	pdf "github.com/boxesandglue/baseline-pdf"
 	"github.com/boxesandglue/boxesandglue/backend/bag"
 	"github.com/boxesandglue/boxesandglue/backend/node"
+	"github.com/boxesandglue/glu/lua/common"
 	"github.com/speedata/go-lua"
 )
 
@@ -86,6 +87,9 @@ func imageNodeIndex(l *lua.State) int {
 	case "height":
 		pushScaledPoint(l, img.Value.Height)
 		return 1
+	case "crop":
+		common.PushCrop(l, img.Value.Crop)
+		return 1
 	}
 	return 0
 }
@@ -100,6 +104,8 @@ func imageNodeNewIndex(l *lua.State) int {
 		img.Value.Width = bag.ScaledPoint(checkDimension(l, 3))
 	case "height":
 		img.Value.Height = bag.ScaledPoint(checkDimension(l, 3))
+	case "crop":
+		img.Value.Crop = common.ParseCrop(l, 3, key)
 	default:
 		lua.Errorf(l, "cannot set attribute %s on ImageNode", key)
 	}

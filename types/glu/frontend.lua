@@ -174,6 +174,25 @@ function Document:load_imagefile(filename, page, box) end
 ---@return ImageNode
 function Document:create_image_node(imagefile, page, box) end
 
+---Create an SVG node for placement
+---@param svgdoc SVGDocument Parsed SVG document
+---@param width Dimension Output width, 0 calculates it from the height
+---@param height? Dimension Output height, 0 calculates it from the width
+---@param options? FontFamily|SVGNodeOptions Fallback family for text elements, or an options table
+---@return SVGNode
+function Document:create_svg_node(svgdoc, width, height, options) end
+
+---@class SVGNodeOptions
+---@field font_family? FontFamily Fallback family for text elements
+---@field crop? ImageCrop Region of the SVG to show, in the units of its width and height
+
+---A region of an image in the units of its natural size: pixels for a bitmap, points of the page box for a PDF page, the width and height for an SVG. x and y are measured from the top left corner.
+---@class ImageCrop
+---@field x? number
+---@field y? number
+---@field width number
+---@field height number
+
 ---Load an ICC color profile
 ---@param filename string Path to ICC profile
 ---@return ColorProfile
@@ -450,6 +469,7 @@ function TableCell:append(item) end
 ---@class ImageNode
 ---@field width ScaledPoint Image width
 ---@field height ScaledPoint Image height
+---@field crop ImageCrop? Region of the image to show, it fills the node's box; nil shows all
 
 --------------------------------------------------------------------------------
 -- ColorProfile
