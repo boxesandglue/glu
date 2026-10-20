@@ -103,16 +103,48 @@ func tableToTypesettingOptions(l *lua.State, index int, doc *frontend.Document) 
 	}
 	l.Pop(1)
 
-	l.Field(absIndex, "indent_left")
-	if l.IsNumber(-1) {
-		n, _ := l.ToNumber(-1)
-		rows := 1
-		l.Field(absIndex, "indent_left_rows")
-		if l.IsNumber(-1) {
-			rows, _ = l.ToInteger(-1)
+	for _, side := range []struct {
+		key    string
+		option func(bag.ScaledPoint, int) frontend.TypesettingOption
+	}{{"indent_left", frontend.IndentLeft}, {"indent_right", frontend.IndentRight}} {
+		l.Field(absIndex, side.key)
+		if !l.IsNil(-1) {
+			sp, err := toDimension(l, -1)
+			if err != nil {
+				lua.Errorf(l, "%s: %s", side.key, err.Error())
+			}
+			rows := 1
+			l.Field(absIndex, side.key+"_rows")
+			if l.IsNumber(-1) {
+				rows, _ = l.ToInteger(-1)
+			}
+			l.Pop(1)
+			opts = append(opts, side.option(sp, rows))
 		}
 		l.Pop(1)
-		opts = append(opts, frontend.IndentLeft(bag.ScaledPointFromFloat(n), rows))
+	}
+
+	// The line breaker's values. 0 keeps the default here; the text
+	// settings of the same names take 0 as a value.
+	l.Field(absIndex, "linebreak_tolerance")
+	if f, ok := l.ToNumber(-1); ok {
+		opts = append(opts, frontend.Tolerance(f))
+	}
+	l.Pop(1)
+
+	l.Field(absIndex, "linebreak_emergency_stretch")
+	if !l.IsNil(-1) {
+		sp, err := toDimension(l, -1)
+		if err != nil {
+			lua.Errorf(l, "linebreak_emergency_stretch: %s", err.Error())
+		}
+		opts = append(opts, frontend.EmergencyStretch(sp))
+	}
+	l.Pop(1)
+
+	l.Field(absIndex, "linebreak_hyphen_penalty")
+	if n, ok := l.ToInteger(-1); ok {
+		opts = append(opts, frontend.HyphenPenalty(n))
 	}
 	l.Pop(1)
 

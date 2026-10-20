@@ -53,6 +53,18 @@ function frontend.text(settings) end
 ---@field tabstops? (Dimension|TabStop)[] Tab stops (alias)
 ---@field horizontal_scale? number Factor for the glyph widths of the run, 0.9 draws them at 90%; greater than 0
 ---@field font_expansion? number Share a glyph may be stretched or shrunk to fill a line, 0.05 is 5%, 0 turns it off; 0 to 1
+---@field linebreak_tolerance? number Largest adjustment ratio a line may have (default 4); 0 takes only lines that fit exactly
+---@field linebreak_emergency_stretch? Dimension Stretch added to every line in a last pass when the paragraph does not break within the tolerance
+---@field linebreak_hyphen_penalty? integer Penalty for a line that ends at a hyphenation point (default 50)
+---@field indent_left_steps? IndentStep[] Left inset that changes from row to row, replaces indent_left
+---@field indent_right_steps? IndentStep[] Right inset that changes from row to row
+---@field background_area? "em_box"|"ascent_descent" Band an inline background covers: the em box (default) or the font's ascent and descent
+---@field record_line_trims? boolean Record each line's trims against the paragraph's font (CSS text-box-trim)
+
+---One step of a staircase inset: inset for the next rows rows. Rows 0 holds for every row from there on. Also written { inset, rows }.
+---@class IndentStep
+---@field inset Dimension
+---@field rows integer
 
 ---A tab stop. A tab advances to the first stop past the text before it.
 ---@class TabStop
@@ -182,8 +194,13 @@ function Document:finish() end
 ---@field fontfamily? FontFamily Font family (alias)
 ---@field language? Language Language for hyphenation
 ---@field halign? "left"|"right"|"center"|"justified" Horizontal alignment
----@field indent_left? number Left indentation in points
----@field indent_left_rows? integer Number of rows to indent
+---@field indent_left? Dimension Left indentation
+---@field indent_left_rows? integer Rows that get indent_left: n > 0 the first n, n < 0 all but the first -n, 0 all (default 1)
+---@field indent_right? Dimension Right indentation, narrows the line without moving its start
+---@field indent_right_rows? integer Rows that get indent_right, as indent_left_rows
+---@field linebreak_tolerance? number Largest adjustment ratio a line may have; 0 keeps the default 4, the text setting takes 0
+---@field linebreak_emergency_stretch? Dimension Stretch added to every line in a last pass of the line breaker
+---@field linebreak_hyphen_penalty? integer Penalty for a line that ends at a hyphenation point; 0 keeps the default 50, the text setting takes 0
 
 ---@class AttachmentOptions
 ---@field filename string Path to file
@@ -269,6 +286,13 @@ function Text:apply(tbl) end
 ---@field tabstops (Dimension|TabStop)[] Tab stops (alias)
 ---@field horizontal_scale number Factor for the glyph widths of the run, 0.9 draws them at 90%; greater than 0
 ---@field font_expansion number Share a glyph may be stretched or shrunk to fill a line, 0.05 is 5%, 0 turns it off; 0 to 1
+---@field linebreak_tolerance number Largest adjustment ratio a line may have (default 4); 0 takes only lines that fit exactly
+---@field linebreak_emergency_stretch Dimension Stretch added to every line in a last pass when the paragraph does not break within the tolerance
+---@field linebreak_hyphen_penalty integer Penalty for a line that ends at a hyphenation point (default 50)
+---@field indent_left_steps IndentStep[] Left inset that changes from row to row, replaces indent_left
+---@field indent_right_steps IndentStep[] Right inset that changes from row to row
+---@field background_area "em_box"|"ascent_descent" Band an inline background covers
+---@field record_line_trims boolean Record each line's trims against the paragraph's font
 
 --------------------------------------------------------------------------------
 -- FontFamily and FontSource

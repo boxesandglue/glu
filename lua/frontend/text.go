@@ -1,7 +1,10 @@
 package frontend
 
 import (
+	"github.com/boxesandglue/boxesandglue/backend/bag"
+	"github.com/boxesandglue/boxesandglue/backend/node"
 	"github.com/boxesandglue/boxesandglue/frontend"
+	"github.com/boxesandglue/glu/lua/common"
 	"github.com/speedata/go-lua"
 )
 
@@ -241,6 +244,20 @@ func settingKeyToType(key string) frontend.SettingType {
 		return frontend.SettingHorizontalScale
 	case "font_expansion":
 		return frontend.SettingFontExpansion
+	case "linebreak_tolerance":
+		return frontend.SettingLinebreakTolerance
+	case "linebreak_emergency_stretch":
+		return frontend.SettingLinebreakEmergencyStretch
+	case "linebreak_hyphen_penalty":
+		return frontend.SettingHyphenPenalty
+	case "indent_left_steps":
+		return frontend.SettingIndentLeftSteps
+	case "indent_right_steps":
+		return frontend.SettingIndentRightSteps
+	case "background_area":
+		return frontend.SettingBackgroundArea
+	case "record_line_trims":
+		return frontend.SettingRecordLineTrims
 	}
 	return 0
 }
@@ -267,9 +284,29 @@ func pushSettingValue(l *lua.State, settingType frontend.SettingType, val any) {
 		if stops, ok := val.([]frontend.TabStop); ok {
 			pushTabStops(l, stops)
 		}
-	case frontend.SettingHorizontalScale, frontend.SettingFontExpansion:
+	case frontend.SettingHorizontalScale, frontend.SettingFontExpansion, frontend.SettingLinebreakTolerance:
 		if f, ok := val.(float64); ok {
 			l.PushNumber(f)
+		}
+	case frontend.SettingLinebreakEmergencyStretch:
+		if sp, ok := val.(bag.ScaledPoint); ok {
+			pushScaledPoint(l, sp)
+		}
+	case frontend.SettingHyphenPenalty:
+		if n, ok := val.(int); ok {
+			l.PushInteger(n)
+		}
+	case frontend.SettingIndentLeftSteps, frontend.SettingIndentRightSteps:
+		if steps, ok := val.([]node.IndentStep); ok {
+			common.PushIndentSteps(l, steps, pushScaledPoint)
+		}
+	case frontend.SettingBackgroundArea:
+		if a, ok := val.(frontend.BackgroundArea); ok {
+			l.PushString(backgroundAreaToString(a))
+		}
+	case frontend.SettingRecordLineTrims:
+		if b, ok := val.(bool); ok {
+			l.PushBoolean(b)
 		}
 	default:
 		l.PushNil()
@@ -459,8 +496,57 @@ func parseSettingKeyValue(l *lua.State, key string, valueIndex int) (frontend.Se
 			}
 			return frontend.SettingFontExpansion, f
 		}
+	case "linebreak_tolerance":
+		// The largest adjustment ratio a line may have, 4 by default; 0
+		// takes only lines that fit exactly.
+		if f, ok := l.ToNumber(valueIndex); ok {
+			if f < 0 {
+				lua.Errorf(l, "linebreak_tolerance must not be negative, got %f", f)
+			}
+			return frontend.SettingLinebreakTolerance, f
+		}
+	case "linebreak_emergency_stretch":
+		if sp, err := toDimension(l, valueIndex); err == nil {
+			return frontend.SettingLinebreakEmergencyStretch, sp
+		}
+	case "linebreak_hyphen_penalty":
+		if n, ok := l.ToInteger(valueIndex); ok {
+			return frontend.SettingHyphenPenalty, n
+		}
+	case "indent_left_steps":
+		return frontend.SettingIndentLeftSteps, common.ParseIndentSteps(l, valueIndex, key, toDimension)
+	case "indent_right_steps":
+		return frontend.SettingIndentRightSteps, common.ParseIndentSteps(l, valueIndex, key, toDimension)
+	case "background_area":
+		if l.IsString(valueIndex) {
+			s, _ := l.ToString(valueIndex)
+			a, ok := parseBackgroundArea(s)
+			if !ok {
+				lua.Errorf(l, "background_area must be em_box or ascent_descent, got %s", s)
+			}
+			return frontend.SettingBackgroundArea, a
+		}
+	case "record_line_trims":
+		return frontend.SettingRecordLineTrims, l.ToBoolean(valueIndex)
 	}
 	return 0, nil
+}
+
+func parseBackgroundArea(s string) (frontend.BackgroundArea, bool) {
+	switch s {
+	case "em_box":
+		return frontend.BackgroundAreaEmBox, true
+	case "ascent_descent":
+		return frontend.BackgroundAreaAscentDescent, true
+	}
+	return 0, false
+}
+
+func backgroundAreaToString(a frontend.BackgroundArea) string {
+	if a == frontend.BackgroundAreaAscentDescent {
+		return "ascent_descent"
+	}
+	return "em_box"
 }
 
 func parseHAlign(s string) frontend.HorizontalAlignment {
