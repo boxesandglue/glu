@@ -77,6 +77,7 @@
 ---@field pre Node? Nodes that end the line when it breaks here (the hyphen)
 ---@field post Node? Nodes that start the next line when it breaks here
 ---@field replace Node? Not used by the line breaker
+---@field replace_count integer Nodes after the Disc that a break here drops (a ligature that pre and post set apart)
 ---@field penalty integer Added to the hyphen penalty; a sum of 10000 or more forbids the break
 
 ---An image node
@@ -158,6 +159,54 @@ function node.hpack_to(head, width) end
 ---@param head Node? First node
 ---@return VListNode
 function node.vpack(head) end
+
+---Append the end of a paragraph after tail: a penalty that forbids a break, a glue of fil stretch and a forced break
+---@param head Node? Head of list
+---@param tail Node Last node
+---@return Node head
+---@return Node tail The forced break
+function node.append_lineend(head, tail) end
+
+---Settings for node.linebreak. Lengths are scaled points, strings with a unit or ScaledPoints.
+---@class LinebreakSettings
+---@field hsize ScaledPoint|integer|string Width of every line
+---@field line_height? ScaledPoint|integer|string Room a line takes up, its box and the glue below it
+---@field tolerance? number Largest adjustment ratio a line may have (default 4)
+---@field emergency_stretch? ScaledPoint|integer|string Stretch for every line in a last pass
+---@field hyphen_penalty? integer Added when a line ends at a Disc (default 50)
+---@field line_penalty? integer Added to the badness of every line (default 10)
+---@field double_hyphen_demerits? integer Two lines in a row end at a Disc (default 10000)
+---@field final_hyphen_demerits? integer The second to last line ends at a Disc (default 5000)
+---@field demerits_fitness? integer Fitness class more than one away from the line before (default 10000)
+---@field font_expansion? number Share of its width by which a glyph may be narrowed or widened
+---@field indent? ScaledPoint|integer|string Left inset of the rows indent_rows selects
+---@field indent_rows? integer n > 0 the first n rows, n < 0 all but the first -n, 0 all
+---@field indent_right? ScaledPoint|integer|string Right inset
+---@field indent_right_rows? integer Rows indent_right applies to
+---@field indent_steps? {inset: ScaledPoint|integer|string, rows: integer}[] Left staircase, replaces indent
+---@field indent_right_steps? {inset: ScaledPoint|integer|string, rows: integer}[] Right staircase
+---@field line_start_glue? GlueNode Glue at the start of every line
+---@field line_end_glue? GlueNode Glue at the end of every line
+---@field squeeze_overfull_boxes? boolean
+---@field hanging_punctuation_end? boolean
+---@field omit_last_leading? boolean
+---@field half_leading? boolean
+---@field font? Font The paragraph's font, records the line trims
+---@field direction? "ltr"|"rtl"
+
+---One line of node.linebreak
+---@class LinebreakLine
+---@field ratio number Adjustment ratio of the line's glue
+---@field demerits integer
+---@field fitness integer 0 tight, 1 decent, 2 loose, 3 very loose
+---@field emergency boolean No feasible break could end the line
+
+---Break a node list into lines. The list must end with a forced break (node.append_lineend).
+---@param head Node First node
+---@param settings LinebreakSettings
+---@return VListNode lines
+---@return LinebreakLine[] info One table per line
+function node.linebreak(head, settings) end
 
 ---Get dimensions of a node list
 ---@param head Node? First node

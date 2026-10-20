@@ -690,6 +690,9 @@ func discIndex(l *lua.State) int {
 	case "penalty":
 		l.PushInteger(d.Penalty)
 		return 1
+	case "replace_count":
+		l.PushInteger(d.ReplaceCount)
+		return 1
 	}
 	return nodeGenericIndex(l, d)
 }
@@ -708,6 +711,8 @@ func discNewIndex(l *lua.State) int {
 		d.Replace = getNode(l, 3)
 	case "penalty":
 		d.Penalty = lua.CheckInteger(l, 3)
+	case "replace_count":
+		d.ReplaceCount = lua.CheckInteger(l, 3)
 	default:
 		nodeGenericNewIndex(l, d)
 	}
@@ -905,6 +910,8 @@ func openNode(l *lua.State) int {
 		{Name: "hpack", Function: nodeHpack},
 		{Name: "hpack_to", Function: nodeHpackTo},
 		{Name: "vpack", Function: nodeVpack},
+		{Name: "linebreak", Function: nodeLinebreak},
+		{Name: "append_lineend", Function: nodeAppendLineend},
 		{Name: "dimensions", Function: nodeDimensions},
 		{Name: "string", Function: nodeString},
 	}, 0)
