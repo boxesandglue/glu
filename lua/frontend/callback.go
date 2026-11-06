@@ -22,6 +22,7 @@ type CallbackRegistry struct {
 	feDoc      *fe.Document        // set when a document is created
 	cssBuilder *htmlbag.CSSBuilder // set after CSS builder is created
 	entries    map[string][]*callbackEntry
+	failed     error // first error of a callback fired from a Go hook
 }
 
 // SetCSSBuilder stores the CSSBuilder reference so that callbacks
@@ -125,13 +126,33 @@ func (cr *CallbackRegistry) Fire(event string, setupArgs func(*lua.State) int) e
 	return nil
 }
 
+// TakeError returns the first error of a callback that ran inside a Go hook
+// and clears it. The hooks of boxes and glue and htmlbag have no error return,
+// so the typesetting goes on until the caller asks. A caller that reads the
+// error decides what happens to the document, which has to fail: it lacks what
+// the callback was meant to do.
+func (cr *CallbackRegistry) TakeError() error {
+	err := cr.failed
+	cr.failed = nil
+	return err
+}
+
+// fireFromHook fires an event from a Go hook and keeps its first error. After
+// a failure no more callbacks run, the document is lost anyway.
+func (cr *CallbackRegistry) fireFromHook(event string, setupArgs func(*lua.State) int) {
+	if cr.failed != nil {
+		return
+	}
+	cr.failed = cr.Fire(event, setupArgs)
+}
+
 // InstallPreShipout registers a Go-level PreShipout callback on the document
 // that fires all registered Lua "pre_shipout" callbacks.
 func (cr *CallbackRegistry) InstallPreShipout(feDoc *fe.Document) {
 	cr.feDoc = feDoc
 	feDoc.Doc.RegisterCallback(document.CallbackPreShipout, func(page *document.Page) {
 		pagenum := len(feDoc.Doc.Pages)
-		err := cr.Fire("pre_shipout", func(l *lua.State) int {
+		cr.fireFromHook("pre_shipout", func(l *lua.State) int {
 			// arg 1: Document
 			l.PushUserData(&Document{Value: feDoc})
 			lua.SetMetaTableNamed(l, documentMetaTable)
@@ -156,9 +177,6 @@ func (cr *CallbackRegistry) InstallPreShipout(feDoc *fe.Document) {
 			}
 			return 4
 		})
-		if err != nil {
-			slog.Error("pre_shipout callback error", "error", err)
-		}
 	})
 }
 
@@ -166,7 +184,7 @@ func (cr *CallbackRegistry) InstallPreShipout(feDoc *fe.Document) {
 // that fires all registered Lua "post_element" callbacks.
 func (cr *CallbackRegistry) InstallPostElement() {
 	cr.cssBuilder.ElementCallback = func(event htmlbag.ElementEvent) {
-		err := cr.Fire("post_element", func(l *lua.State) int {
+		cr.fireFromHook("post_element", func(l *lua.State) int {
 			// arg 1: ElementInfo
 			l.PushUserData(&ElementInfo{event: event})
 			lua.SetMetaTableNamed(l, elementInfoMetaTable)
@@ -178,9 +196,6 @@ func (cr *CallbackRegistry) InstallPostElement() {
 			}
 			return 1
 		})
-		if err != nil {
-			slog.Error("post_element callback error", "error", err)
-		}
 	}
 }
 
@@ -190,7 +205,7 @@ func (cr *CallbackRegistry) InstallPageInit() {
 	cr.cssBuilder.PageInitCallback = func() {
 		page := cr.feDoc.Doc.CurrentPage
 		pagenum := len(cr.feDoc.Doc.Pages)
-		err := cr.Fire("page_init", func(l *lua.State) int {
+		cr.fireFromHook("page_init", func(l *lua.State) int {
 			// arg 1: Document
 			l.PushUserData(&Document{Value: cr.feDoc})
 			lua.SetMetaTableNamed(l, documentMetaTable)
@@ -211,9 +226,6 @@ func (cr *CallbackRegistry) InstallPageInit() {
 			}
 			return 4
 		})
-		if err != nil {
-			slog.Error("page_init callback error", "error", err)
-		}
 	}
 }
 

@@ -72,6 +72,17 @@ func fireCallback(event string) error {
 	return nil
 }
 
+// callbackError returns the failure of a callback that ran inside a hook of
+// the typesetting, as an error of the run.
+func callbackError() error {
+	if cr := luafrontend.GetRegistry(); cr != nil {
+		if err := cr.TakeError(); err != nil {
+			return fmt.Errorf("%w: %s", errkind.Lua, err.Error())
+		}
+	}
+	return nil
+}
+
 // setAuxGlobal sets the _aux Lua global from the aux map and also sets
 // _toc to _aux._headings for backward compatibility.
 func setAuxGlobal(l *lua.State, data map[string]any) {
@@ -837,11 +848,18 @@ func applyTraces(fe *frontend.Document, cb *htmlbag.CSSBuilder, names []string) 
 // between the default stylesheet and the author layers; the Markdown
 // path passes markdownOutlineCSS and markdownFootnoteCSS, the HTML path
 // passes "".
-func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath string, fm Frontmatter, opts Options, extraCSS string, oldAux map[string]any) (bool, string, error) {
+func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath string, fm Frontmatter, opts Options, extraCSS string, oldAux map[string]any) (changed bool, hash string, err error) {
 	fe, err := frontend.New(outputFilename)
 	if err != nil {
 		return false, "", fmt.Errorf("%w: creating document: %s", errkind.Typeset, err.Error())
 	}
+	// frontend.New creates the file, so a failed run would leave the start
+	// of a PDF behind. A file at the output path means the run went through.
+	defer func() {
+		if err != nil {
+			os.Remove(outputFilename)
+		}
+	}()
 	if !opts.SourceDateEpoch.IsZero() {
 		// Override the library-level SOURCE_DATE_EPOCH default
 		// (boxesandglue/frontend.New reads the env directly) with the
@@ -998,9 +1016,15 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if err := cb.OutputPagesFromText(te); err != nil {
 		return false, "", fmt.Errorf("%w: outputting pages: %s", errkind.Typeset, err.Error())
 	}
+	if err := callbackError(); err != nil {
+		return false, "", err
+	}
 
 	if err := fe.Finish(); err != nil {
 		return false, "", fmt.Errorf("%w: finishing document: %s", errkind.Typeset, err.Error())
+	}
+	if err := callbackError(); err != nil {
+		return false, "", err
 	}
 	if err := fireCallback("document_end"); err != nil {
 		return false, "", fmt.Errorf("%w: document_end callback: %s", errkind.Lua, err.Error())
@@ -1035,7 +1059,7 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 	if err := os.WriteFile(auxPath, curBytes, 0644); err != nil {
 		return false, "", fmt.Errorf("%w: writing aux file: %s", errkind.IO, err.Error())
 	}
-	changed := needsAnotherPass(oldAux, curAux, cb.PreviousPassReads(), ranUserLua(l))
+	changed = needsAnotherPass(oldAux, curAux, cb.PreviousPassReads(), ranUserLua(l))
 
 	if opts.Result != nil {
 		opts.Result.Pages = len(fe.Doc.Pages)

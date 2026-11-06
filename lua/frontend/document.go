@@ -98,11 +98,24 @@ func documentNew(l *lua.State) int {
 // documentFinish finalizes the document: doc:finish()
 func documentFinish(l *lua.State) int {
 	d := checkDocument(l, 1)
+	raiseCallbackError(l)
 	if err := d.Value.Finish(); err != nil {
 		lua.Errorf(l, "failed to finish document: %s", err.Error())
 		return 0
 	}
+	raiseCallbackError(l)
 	return 0
+}
+
+// raiseCallbackError turns a failed callback into an error of the script.
+// The callback can only have run in a hook, where it could not raise one.
+func raiseCallbackError(l *lua.State) {
+	if registry == nil {
+		return
+	}
+	if err := registry.TakeError(); err != nil {
+		lua.Errorf(l, "%s", err.Error())
+	}
 }
 
 // documentNewFontFamily creates a new font family: doc:new_font_family(name)
