@@ -39,14 +39,13 @@ func colorNew(l *lua.State) int {
 			col.R = r
 			col.G = g
 			col.B = b
-			col.A = a
 		} else {
 			// Assume 0-255 scale
 			col.R = r / 255.0
 			col.G = g / 255.0
 			col.B = b / 255.0
-			col.A = a
 		}
+		col.Transparency = 1 - a
 	} else {
 		lua.Errorf(l, "color.new requires numeric arguments (r, g, b, [a])")
 		return 0
@@ -79,7 +78,7 @@ func colorIndex(l *lua.State) int {
 			return 1
 		}
 	case "a", "alpha":
-		l.PushNumber(c.Value.A)
+		l.PushNumber(c.Value.Alpha())
 		return 1
 	case "c", "cyan":
 		if c.Value.Space == color.ColorCMYK {
