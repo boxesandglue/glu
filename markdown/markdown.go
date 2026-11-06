@@ -690,9 +690,16 @@ func runHTMLPass(l *lua.State, htmlStr, baseDir, outputFilename, auxPath, compan
 	if format == "" {
 		format = extractHTMLMetaFormat(htmlStr)
 	}
+	// The language of the document comes from the document too, unless the
+	// caller set it. Without it the catalog claims the default language,
+	// and a screen reader reads German text with English pronunciation.
+	language := opts.Lang
+	if language == "" {
+		language = extractHTMLLang(htmlStr)
+	}
 	fm := Frontmatter{
 		Title:  title,
-		Lang:   opts.Lang,
+		Lang:   language,
 		Format: format,
 	}
 	return renderHTMLToPDF(l, htmlStr, baseDir, outputFilename, auxPath, fm, opts, "", oldAux)
@@ -739,6 +746,34 @@ func extractHTMLMetaFormat(htmlStr string) string {
 		}
 		if m := metaContentRE.FindStringSubmatch(tag); m != nil {
 			return strings.TrimSpace(htmlpkg.UnescapeString(m[1]))
+		}
+	}
+	return ""
+}
+
+// Matching the opening <html> and <body> tags with their language. lang wins
+// over xml:lang, as in HTML. The attribute value is quoted or a bare word.
+var (
+	rootTagRE = regexp.MustCompile(`(?is)<(?:html|body)(?:\s[^>]*)?>`)
+	langAttrs = []*regexp.Regexp{
+		regexp.MustCompile(`(?is)\slang\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))`),
+		regexp.MustCompile(`(?is)\sxml:lang\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))`),
+	}
+)
+
+// extractHTMLLang returns the language of the document as declared on the
+// <html> element, or on <body> if <html> has none. It returns "" without a
+// declaration. A lang further down holds for that element only.
+func extractHTMLLang(htmlStr string) string {
+	for _, tag := range rootTagRE.FindAllString(htmlStr, 2) {
+		for _, attr := range langAttrs {
+			m := attr.FindStringSubmatch(tag)
+			if m == nil {
+				continue
+			}
+			if v := strings.TrimSpace(htmlpkg.UnescapeString(m[1] + m[2] + m[3])); v != "" {
+				return v
+			}
 		}
 	}
 	return ""

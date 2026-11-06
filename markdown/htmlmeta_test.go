@@ -37,3 +37,29 @@ func TestExtractHTMLMetaFormat(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractHTMLLang(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"html", `<!DOCTYPE html><html lang="de"><head></head></html>`, "de"},
+		{"single quotes", `<html lang='fr'>`, "fr"},
+		{"unquoted", `<html lang=en-US class=x>`, "en-US"},
+		{"among attributes", `<html class="a" lang="de" dir="ltr">`, "de"},
+		{"case-insensitive", `<HTML LANG="de">`, "de"},
+		{"xml:lang", `<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="de">`, "de"},
+		{"lang wins over xml:lang", `<html xml:lang="fr" lang="de">`, "de"},
+		{"body as fallback", `<html><body lang="de"><p>x</p></body></html>`, "de"},
+		{"html wins over body", `<html lang="de"><body lang="fr"></body></html>`, "de"},
+		{"data attribute ignored", `<html data-lang="de">`, ""},
+		{"later element ignored", `<html><body><p lang="fr">x</p></body></html>`, ""},
+		{"hgroup is no html element", `<hgroup lang="fr"></hgroup>`, ""},
+		{"empty", `<html lang="">`, ""},
+		{"none", `<html><head></head></html>`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractHTMLLang(tc.in); got != tc.want {
+				t.Errorf("extractHTMLLang(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
