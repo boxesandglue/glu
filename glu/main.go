@@ -189,7 +189,7 @@ func dothings() error {
 	op.On("--css FILE", "Additional CSS file", &cssFile)
 	op.On("--markdown", "Print expanded Markdown to stdout (debug)", &debugMarkdown)
 	op.On("--html", "Print generated HTML to stdout (debug, Markdown mode)", &debugHTML)
-	op.On("--trace LIST", "Debug overlays: boxmodel, dests, hboxes, hyperlinks (comma-separated)", &traceStr)
+	op.On("--trace LIST", "Debug overlays: boxmodel, dests, hboxes, hyperlinks, linegrid (comma-separated)", &traceStr)
 	op.On("--clean", "Remove auxiliary files before processing", &clean)
 	op.On("--cpuprofile FILE", "Write CPU profile to file", &cpuprofile)
 	op.Command("help", "Show the help message")

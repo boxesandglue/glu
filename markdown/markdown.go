@@ -195,7 +195,7 @@ type Options struct {
 	// same input — the SOURCE_DATE_EPOCH reproducible-builds protocol.
 	SourceDateEpoch time.Time
 	// Trace lists debug overlay switches, comma- or space-separated
-	// (the --trace CLI flag): boxmodel, dests, hboxes, hyperlinks.
+	// (the --trace CLI flag): boxmodel, dests, hboxes, hyperlinks, linegrid.
 	// Combined (union) with the frontmatter trace: key, so an ad-hoc
 	// CLI trace does not require editing the document.
 	Trace string
@@ -769,7 +769,8 @@ func ProcessHTMLString(l *lua.State, htmlStr, baseDir, outputFilename string, op
 // attributes of xts' <Trace> element where the underlying feature lives
 // in htmlbag or the backend: boxmodel (CSS box model overlay), hboxes
 // (line metrics: height/depth tints, baseline), hyperlinks (frames
-// around link areas), dests (marks at PDF destinations). The xts-only
+// around link areas), dests (marks at PDF destinations), linegrid
+// (numbered lines on the baselines of a flow). The xts-only
 // switches (grid, gridallocation, objects, hyphenation) are grid-layout
 // features without an HTML pipeline equivalent.
 func applyTraces(fe *frontend.Document, cb *htmlbag.CSSBuilder, names []string) {
@@ -777,6 +778,8 @@ func applyTraces(fe *frontend.Document, cb *htmlbag.CSSBuilder, names []string) 
 		switch strings.ToLower(name) {
 		case "boxmodel":
 			cb.TraceBoxModel = true
+		case "linegrid":
+			cb.TraceLineGrid = true
 		case "hboxes":
 			fe.Doc.SetVTrace(document.VTraceHBoxes)
 		case "hyperlinks":
@@ -784,7 +787,7 @@ func applyTraces(fe *frontend.Document, cb *htmlbag.CSSBuilder, names []string) 
 		case "dests":
 			fe.Doc.SetVTrace(document.VTraceDest)
 		default:
-			slog.Warn("Unknown trace switch", "value", name, "known", "boxmodel, dests, hboxes, hyperlinks")
+			slog.Warn("Unknown trace switch", "value", name, "known", "boxmodel, dests, hboxes, hyperlinks, linegrid")
 		}
 	}
 }

@@ -34,7 +34,7 @@ import (
 //	lang     = "en-US"      -- BCP47, written to PDF /Lang
 //	title    = "Showcase"   -- PDF /Title (also XMP dc:title)
 //	trace    = "boxmodel"   -- debug overlays, comma-separated
-//	                        -- (boxmodel, dests, hboxes, hyperlinks)
+//	                        -- (boxmodel, dests, hboxes, hyperlinks, linegrid)
 //
 // Unknown keys are silently ignored. base_dir defaults to ".".
 func luaRender(l *lua.State) int {
