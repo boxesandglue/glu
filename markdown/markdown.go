@@ -699,7 +699,7 @@ func runHTMLPass(l *lua.State, htmlStr, baseDir, outputFilename, auxPath, compan
 	// self-contained document renders correctly with a bare `glu file.html`.
 	format := opts.Format
 	if format == "" {
-		format = extractHTMLMetaFormat(htmlStr)
+		format = extractHTMLMeta(htmlStr, "pdf-format")
 	}
 	// The language of the document comes from the document too, unless the
 	// caller set it. Without it the catalog claims the default language,
@@ -710,6 +710,7 @@ func runHTMLPass(l *lua.State, htmlStr, baseDir, outputFilename, auxPath, compan
 	}
 	fm := Frontmatter{
 		Title:  title,
+		Author: extractHTMLMeta(htmlStr, "author"),
 		Lang:   language,
 		Format: format,
 	}
@@ -737,22 +738,23 @@ func extractHTMLTitle(htmlStr string) string {
 var stripTagsRE = regexp.MustCompile(`<[^>]*>`)
 
 // Matching <meta> elements with arbitrary attribute order: scan each meta
-// tag, keep the one naming pdf-format, then pull its content. A single
-// ordered regex would miss content-before-name authoring.
+// tag, keep the one with the name, then pull its content. A single ordered
+// regex would miss content-before-name authoring.
 var (
 	metaTagRE     = regexp.MustCompile(`(?is)<meta\b[^>]*>`)
-	metaPDFNameRE = regexp.MustCompile(`(?is)\bname\s*=\s*["']pdf-format["']`)
+	metaNameRE    = regexp.MustCompile(`(?is)\bname\s*=\s*["']([^"']*)["']`)
 	metaContentRE = regexp.MustCompile(`(?is)\bcontent\s*=\s*["']([^"']*)["']`)
 )
 
-// extractHTMLMetaFormat returns the PDF conformance level declared by a
-// <meta name="pdf-format" content="PDF/UA-2"> element, or "" if none. This
-// is the HTML equivalent of the Markdown frontmatter `format:` key, letting a
-// standalone HTML document request its own conformance level without a CLI
-// flag.
-func extractHTMLMetaFormat(htmlStr string) string {
+// extractHTMLMeta returns the content of the first <meta> element with the
+// given name, or "" if there is none. This is how an HTML document declares
+// what a Markdown document has in its frontmatter: "pdf-format" is the
+// conformance level, so a standalone document needs no CLI flag, and "author"
+// the author of the PDF.
+func extractHTMLMeta(htmlStr, name string) string {
 	for _, tag := range metaTagRE.FindAllString(htmlStr, -1) {
-		if !metaPDFNameRE.MatchString(tag) {
+		n := metaNameRE.FindStringSubmatch(tag)
+		if n == nil || !strings.EqualFold(n[1], name) {
 			continue
 		}
 		if m := metaContentRE.FindStringSubmatch(tag); m != nil {
@@ -997,8 +999,10 @@ func renderHTMLToPDF(l *lua.State, htmlStr, baseDir, outputFilename, auxPath str
 			return false, "", fmt.Errorf("%w: reading CSS file %s: %s", errkind.IO, cssPath, err.Error())
 		}
 	}
+	// --css comes after the stylesheets of the document, so it can change a
+	// finished document: fm.CSS belongs to the document, the flag to the run.
 	if opts.CSSFile != "" {
-		if err := cb.ReadCSSFile(opts.CSSFile); err != nil {
+		if err := cb.ReadCSSFileAfterDocument(opts.CSSFile); err != nil {
 			return false, "", fmt.Errorf("%w: reading CSS file %s: %s", errkind.IO, opts.CSSFile, err.Error())
 		}
 	}

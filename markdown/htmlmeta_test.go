@@ -31,8 +31,8 @@ func TestExtractHTMLMetaFormat(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := extractHTMLMetaFormat(tc.in); got != tc.want {
-				t.Errorf("extractHTMLMetaFormat(%q) = %q, want %q", tc.in, got, tc.want)
+			if got := extractHTMLMeta(tc.in, "pdf-format"); got != tc.want {
+				t.Errorf("extractHTMLMeta(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
@@ -59,6 +59,24 @@ func TestExtractHTMLLang(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := extractHTMLLang(tc.in); got != tc.want {
 				t.Errorf("extractHTMLLang(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractHTMLMetaAuthor(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"basic", `<meta name="author" content="Jane Doe">`, "Jane Doe"},
+		{"content before name", `<meta content="Jane Doe" name="author">`, "Jane Doe"},
+		{"entities decoded", `<meta name="author" content="Smith &amp; Sons">`, "Smith & Sons"},
+		{"case-insensitive", `<META NAME="AUTHOR" CONTENT="Jane Doe">`, "Jane Doe"},
+		{"other meta ignored", `<meta name="pdf-format" content="PDF/UA">`, ""},
+		{"none", `<head><title>x</title></head>`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractHTMLMeta(tc.in, "author"); got != tc.want {
+				t.Errorf("extractHTMLMeta(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
