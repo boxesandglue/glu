@@ -39,6 +39,11 @@ import (
 // whitespace span) just before the closing </code></pre> sequence.
 var preTrailingNL = regexp.MustCompile(`(?:<span[^>]*>)?\n((?:</span>)*</code></pre>)`)
 
+// chromaLine is how chroma opens each line of a code block. The flex layout
+// keeps long lines apart in a browser, htmlbag has no use for it and would
+// warn about CSS nobody wrote.
+const chromaLine = `<span style="display:flex;">`
+
 // readAuxFile reads a previously written aux file. If the file does not exist
 // it returns an empty map and no error.
 func readAuxFile(auxPath string) (map[string]any, error) {
@@ -571,6 +576,7 @@ func markdownToHTML(body string, fm Frontmatter) (string, error) {
 	// Strip trailing newline inside <pre><code> blocks (chroma and
 	// goldmark both add one).
 	htmlStr := preTrailingNL.ReplaceAllString(htmlBuf.String(), "$1")
+	htmlStr = strings.ReplaceAll(htmlStr, chromaLine, "<span>")
 	slog.Debug("HTML generated", "length", len(htmlStr))
 	return htmlStr, nil
 }
