@@ -80,6 +80,9 @@ func colorIndex(l *lua.State) int {
 	case "a", "alpha":
 		l.PushNumber(c.Value.Alpha())
 		return 1
+	case "overprint":
+		l.PushBoolean(c.Value.Overprint)
+		return 1
 	case "c", "cyan":
 		if c.Value.Space == color.ColorCMYK {
 			l.PushNumber(c.Value.C)
@@ -105,11 +108,32 @@ func colorIndex(l *lua.State) int {
 	return 0
 }
 
+// colorNewIndex handles attribute assignment (__newindex metamethod). The
+// color behind a userdata can be shared: get_color hands out the same color for
+// a name. So the userdata gets a color of its own, and other users of the name
+// keep theirs. define_color takes the color as it is at that moment.
+func colorNewIndex(l *lua.State) int {
+	c := checkColor(l, 1)
+	key := lua.CheckString(l, 2)
+
+	switch key {
+	case "overprint":
+		lua.CheckType(l, 3, lua.TypeBoolean)
+		col := *c.Value
+		col.Overprint = l.ToBoolean(3)
+		c.Value = &col
+	default:
+		lua.Errorf(l, "Color has no writable attribute %s", key)
+	}
+	return 0
+}
+
 // registerColorMetaTable creates the Color metatable
 func registerColorMetaTable(l *lua.State) {
 	lua.NewMetaTable(l, colorMetaTable)
 	lua.SetFunctions(l, []lua.RegistryFunction{
 		{Name: "__index", Function: colorIndex},
+		{Name: "__newindex", Function: colorNewIndex},
 	}, 0)
 	l.Pop(1)
 }

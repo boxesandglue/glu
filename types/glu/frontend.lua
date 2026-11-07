@@ -446,6 +446,8 @@ function TableCell:append(item) end
 
 ---A color value
 ---@class Color
+---@field a number Alpha value, 1 is opaque (read only)
+---@field overprint boolean The color prints on top of what is below it. Setting it changes this object only, so hand it to Document:define_color or to a text afterwards
 
 --------------------------------------------------------------------------------
 -- Language
