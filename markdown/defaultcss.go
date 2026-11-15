@@ -141,6 +141,12 @@ div.footnotes {
 	display: none;
 }
 
+/* An image keeps its natural size but never gets wider than the text
+   column, as in a browser with the usual img { max-width: 100% }. */
+img {
+	max-width: 100%;
+}
+
 strong, b {
 	font-weight: bold;
 }
