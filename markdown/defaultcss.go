@@ -13,10 +13,15 @@ body {
 	font-family: serif;
 	font-size: 10pt;
 	line-height: 1.4;
-	/* Content rarely sets an explicit direction, so the base direction
-	 * is derived from the first strong character (CSS Writing Modes 3
-	 * §2.4). Applies to Markdown and HTML mode alike; a dir= attribute
-	 * or an explicit unicode-bidi declaration overrides it. */
+}
+
+/* Content rarely sets an explicit direction, so the base direction of
+ * each paragraph is derived from its first strong character (CSS Writing
+ * Modes 3 §2.2). unicode-bidi is not inherited, so it goes on the blocks
+ * that hold the text. Applies to Markdown and HTML mode alike; a dir=
+ * attribute or an explicit unicode-bidi declaration overrides it. */
+p, div, li, dd, dt, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th,
+caption, figcaption {
 	unicode-bidi: plaintext;
 }
 
