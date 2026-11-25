@@ -4,9 +4,9 @@ go 1.25.0
 
 require (
 	github.com/boxesandglue/baseline-pdf v1.1.34
-	github.com/boxesandglue/boxesandglue v0.2.106
+	github.com/boxesandglue/boxesandglue v0.2.107
 	github.com/boxesandglue/hobby v0.0.6
-	github.com/boxesandglue/htmlbag v0.0.107
+	github.com/boxesandglue/htmlbag v0.0.108
 	github.com/boxesandglue/svgreader v0.0.10
 	github.com/boxesandglue/textshape v0.0.21
 	github.com/fsnotify/fsnotify v1.10.1
