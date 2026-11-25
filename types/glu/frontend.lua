@@ -53,6 +53,8 @@ function frontend.text(settings) end
 ---@field tab_stops? (Dimension|string|TabStop)[] Tab stops; a plain position is a left stop
 ---@field tabstops? (Dimension|TabStop)[] Tab stops (alias)
 ---@field horizontal_scale? number Factor for the glyph widths of the run, 0.9 draws them at 90%; greater than 0
+---@field word_spacing? Dimension Added to every word space, as CSS word-spacing; may be negative
+---@field word_spacing_limits? WordSpacingLimits Minimum, natural and maximum width of a word space as factors of the font's space width
 ---@field font_expansion? number Share a glyph may be stretched or shrunk to fill a line, 0.05 is 5%, 0 turns it off; 0 to 1
 ---@field linebreak_tolerance? number Largest adjustment ratio a line may have (default 4); 0 takes only lines that fit exactly
 ---@field linebreak_emergency_stretch? Dimension Stretch added to every line in a last pass when the paragraph does not break within the tolerance
@@ -66,6 +68,12 @@ function frontend.text(settings) end
 ---@class IndentStep
 ---@field inset Dimension
 ---@field rows integer
+
+---Minimum, natural and maximum width of a word space as factors of the font's space width. Ragged text uses opt; a justified line shrinks a space to min and stretches it to max before it counts as loose. A missing field keeps its default; 0 <= min <= opt <= max.
+---@class WordSpacingLimits
+---@field min? number Default 2/3
+---@field opt? number Default 1
+---@field max? number Default 1.5
 
 ---A tab stop. A tab advances to the first stop past the text before it.
 ---@class TabStop
@@ -306,6 +314,8 @@ function Text:apply(tbl) end
 ---@field tab_stops (Dimension|TabStop)[] Tab stops; reads back as a list of TabStop tables
 ---@field tabstops (Dimension|TabStop)[] Tab stops (alias)
 ---@field horizontal_scale number Factor for the glyph widths of the run, 0.9 draws them at 90%; greater than 0
+---@field word_spacing Dimension Added to every word space, as CSS word-spacing
+---@field word_spacing_limits WordSpacingLimits Minimum, natural and maximum width of a word space as factors of the font's space width
 ---@field font_expansion number Share a glyph may be stretched or shrunk to fill a line, 0.05 is 5%, 0 turns it off; 0 to 1
 ---@field linebreak_tolerance number Largest adjustment ratio a line may have (default 4); 0 takes only lines that fit exactly
 ---@field linebreak_emergency_stretch Dimension Stretch added to every line in a last pass when the paragraph does not break within the tolerance

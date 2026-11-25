@@ -268,6 +268,10 @@ func settingKeyToType(key string) frontend.SettingType {
 		return frontend.SettingLeader
 	case "horizontal_scale":
 		return frontend.SettingHorizontalScale
+	case "word_spacing":
+		return frontend.SettingWordSpacing
+	case "word_spacing_limits":
+		return frontend.SettingWordSpacingLimits
 	case "font_expansion":
 		return frontend.SettingFontExpansion
 	case "linebreak_tolerance":
@@ -286,6 +290,27 @@ func settingKeyToType(key string) frontend.SettingType {
 		return frontend.SettingRecordLineTrims
 	}
 	return 0
+}
+
+// parseWordSpacingLimits reads a word_spacing_limits table {min=, opt=,
+// max=}. A missing field takes the default (frontend.DefaultWordSpacing);
+// the values must not decrease.
+func parseWordSpacingLimits(l *lua.State, index int) frontend.WordSpacing {
+	ws := frontend.DefaultWordSpacing
+	for _, f := range []struct {
+		name string
+		dst  *float64
+	}{{"min", &ws.Min}, {"opt", &ws.Opt}, {"max", &ws.Max}} {
+		l.Field(index, f.name)
+		if n, ok := l.ToNumber(-1); ok {
+			*f.dst = n
+		}
+		l.Pop(1)
+	}
+	if ws.Min < 0 || ws.Min > ws.Opt || ws.Opt > ws.Max {
+		lua.Errorf(l, "word_spacing_limits needs 0 <= min <= opt <= max, got %f %f %f", ws.Min, ws.Opt, ws.Max)
+	}
+	return ws
 }
 
 func pushSettingValue(l *lua.State, settingType frontend.SettingType, val any) {
@@ -314,9 +339,19 @@ func pushSettingValue(l *lua.State, settingType frontend.SettingType, val any) {
 		if f, ok := val.(float64); ok {
 			l.PushNumber(f)
 		}
-	case frontend.SettingLinebreakEmergencyStretch:
+	case frontend.SettingLinebreakEmergencyStretch, frontend.SettingWordSpacing:
 		if sp, ok := val.(bag.ScaledPoint); ok {
 			pushScaledPoint(l, sp)
+		}
+	case frontend.SettingWordSpacingLimits:
+		if ws, ok := val.(frontend.WordSpacing); ok {
+			l.NewTable()
+			l.PushNumber(ws.Min)
+			l.SetField(-2, "min")
+			l.PushNumber(ws.Opt)
+			l.SetField(-2, "opt")
+			l.PushNumber(ws.Max)
+			l.SetField(-2, "max")
 		}
 	case frontend.SettingHyphenPenalty:
 		if n, ok := val.(int); ok {
@@ -496,6 +531,17 @@ func parseSettingKeyValue(l *lua.State, key string, valueIndex int) (frontend.Se
 		if l.IsString(valueIndex) {
 			s, _ := l.ToString(valueIndex)
 			return frontend.SettingLeader, s
+		}
+	case "word_spacing":
+		// Added to every word space, as CSS word-spacing.
+		if sp, err := toDimension(l, valueIndex); err == nil {
+			return frontend.SettingWordSpacing, sp
+		}
+	case "word_spacing_limits":
+		// {min=, opt=, max=}: minimum, natural and maximum width of a word
+		// space as factors of the font's space width.
+		if l.IsTable(valueIndex) {
+			return frontend.SettingWordSpacingLimits, parseWordSpacingLimits(l, valueIndex)
 		}
 	case "horizontal_scale":
 		// A factor, 0.9 draws the glyphs at 90% of their width.

@@ -114,3 +114,30 @@ t.settings.underline = false
 		t.Errorf("decoration lines %v, want none", v)
 	}
 }
+
+// word_spacing and word_spacing_limits become the frontend settings and
+// read back as they were set; a missing limit takes the default.
+func TestTextWordSpacing(t *testing.T) {
+	te, err := runText(t, `
+t = frontend.text()
+t:apply({
+	word_spacing = "1pt",
+	word_spacing_limits = { min = 0.8, max = 1.33 },
+})
+local s = t.settings
+assert(tostring(s.word_spacing) == "1pt")
+assert(s.word_spacing_limits.min == 0.8 and s.word_spacing_limits.opt == 1 and s.word_spacing_limits.max == 1.33)
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := te.Settings[frontend.SettingWordSpacing]; v != bag.MustSP("1pt") {
+		t.Errorf("word spacing %v, want 1pt", v)
+	}
+	if v := te.Settings[frontend.SettingWordSpacingLimits]; v != (frontend.WordSpacing{Min: 0.8, Opt: 1, Max: 1.33}) {
+		t.Errorf("limits %v, want 0.8 1 1.33", v)
+	}
+	if _, err := runText(t, `t = frontend.text() t:apply({ word_spacing_limits = { min = 1.2, opt = 1 } })`); err == nil || !strings.Contains(err.Error(), "word_spacing_limits") {
+		t.Errorf("decreasing limits: error %v, want one about word_spacing_limits", err)
+	}
+}
