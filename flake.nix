@@ -20,9 +20,9 @@
       {
         packages.default = pkgs.buildGoModule rec {
           pname = "glu";
-          version = "0.0.60";
+          version = "0.0.61";
           src = self;
-          vendorHash = "sha256-Vi/1jt89qvkGVTP2mxmDx2ohe2GHyPk6B4r78Q2mfsU=";
+          vendorHash = "sha256-RrXzGCrTvIdbLw6Xewr6LE141ufXxJp1mHrKJVm5Sr8=";
           subPackages = [ "glu" ];
           # The golden tests compare rendered PDFs and need fonts and
           # poppler, which are not available inside the build sandbox.
